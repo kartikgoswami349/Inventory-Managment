@@ -1,0 +1,11 @@
+﻿{
+  "name": "r58-inventory",
+  "private": true,
+  "scripts": {
+    "mobile": "npm.cmd --prefix apps/mobile start",
+    "mobile:android": "npm.cmd --prefix apps/mobile run android",
+    "mobile:ios": "npm.cmd --prefix apps/mobile run ios",
+    "mobile:web": "npm.cmd --prefix apps/mobile run web",
+    "pc": "npm.cmd --prefix apps/pc run dev"
+  }
+}

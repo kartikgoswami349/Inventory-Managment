@@ -1,0 +1,31 @@
+{
+  "name": "r58-inventory-pc",
+  "version": "0.3.2",
+  "private": true,
+  "description": "R58 Inventory Windows desktop peer for the existing Android app",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "5.1.4",
+    "better-sqlite3": "13.0.3",
+    "bonjour-service": "1.4.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "24.0.15",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "electron": "41.5.2",
+    "electron-vite": "5.0.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

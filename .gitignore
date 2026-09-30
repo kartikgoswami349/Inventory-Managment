@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+build/
+out/
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
