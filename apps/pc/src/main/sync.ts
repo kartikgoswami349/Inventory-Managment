@@ -122,7 +122,7 @@ function ensureLocalMeta() {
 
 function readEntries(table: string, entityType: SyncMeta['entityType']) {
   const database = getDb();
-  return database.prepare(`
+  const rows = database.prepare(`
     SELECT
       x.*,
       s.revision AS __revision,
@@ -134,7 +134,8 @@ function readEntries(table: string, entityType: SyncMeta['entityType']) {
       ON s.entity_id = x.id
      AND s.entity_type = ?
     ORDER BY x.id
-  `).all(entityType).map((row: Record<string, unknown>) => {
+  `).all(entityType) as Array<Record<string, unknown>>;
+  return rows.map(row => {
     const { __revision, __modified_at, __modified_by_device, __deleted, ...data } = row;
     return {
       data,
@@ -181,8 +182,9 @@ function writeMeta(meta: SyncMeta) {
   `).run(meta.entityType, meta.entityId, meta.revision, meta.modifiedAt, meta.modifiedByDevice, meta.deleted);
 }
 
-function applyPacket(packet: SyncPacket) {
-  validatePacket(packet);
+function applyPacket(untrustedPacket: unknown) {
+  validatePacket(untrustedPacket);
+  const packet = untrustedPacket;
   const database = getDb();
   let applied = 0;
   let skipped = 0;
@@ -246,7 +248,7 @@ function applyPacket(packet: SyncPacket) {
       `).run(
         entry.data.id, entry.data.item_id, entry.data.transaction_type, entry.data.quantity,
         entry.data.stock_delta, entry.data.department_id, entry.data.person_id, entry.data.other_name,
-        entry.data.other_department_name, entry.data.remark, entry.data.timestamp, entry.data.device_id,
+        entry.data.other_department_name ?? null, entry.data.remark, entry.data.timestamp, entry.data.device_id,
       );
       writeMeta(entry.sync); applied++; transactions++;
     }
@@ -288,6 +290,32 @@ function applyPacket(packet: SyncPacket) {
     sourceDeviceId: packet.sourceDevice.id,
     sourceDeviceName: packet.sourceDevice.name,
   };
+}
+
+export function applyManualSyncPacket(packet: unknown) {
+  return runSyncSerialized(() => {
+    validatePacket(packet);
+    const byStockId = getDb().prepare('SELECT id FROM items WHERE stock_id = ?');
+    const byQrCode = getDb().prepare('SELECT id FROM items WHERE qr_code = ?');
+    const sourceStockIds = new Map<string, string>();
+    const sourceQrCodes = new Map<string, string>();
+    for (const entry of packet.records.items) {
+      const id = String(entry.data.id);
+      const stockId = String(entry.data.stock_id ?? '');
+      const qrCode = String(entry.data.qr_code ?? '');
+      const stockOwner = sourceStockIds.get(stockId);
+      if (stockOwner && stockOwner !== id) throw new Error(`Cannot import duplicate Stock ID ${stockId}.`);
+      const qrOwner = sourceQrCodes.get(qrCode);
+      if (qrOwner && qrOwner !== id) throw new Error(`Cannot import duplicate QR code ${qrCode}.`);
+      sourceStockIds.set(stockId, id);
+      sourceQrCodes.set(qrCode, id);
+      const stockMatch = byStockId.get(stockId) as { id: string } | undefined;
+      const qrMatch = byQrCode.get(qrCode) as { id: string } | undefined;
+      if (stockMatch && stockMatch.id !== id) throw new Error(`Cannot import: Stock ID ${stockId} belongs to another local item.`);
+      if (qrMatch && qrMatch.id !== id) throw new Error(`Cannot import: QR code ${qrCode} belongs to another local item.`);
+    }
+    return applyPacket(packet);
+  });
 }
 
 function connectAndExchange(host: string, request: Record<string, unknown>, timeoutMs = 30000) {

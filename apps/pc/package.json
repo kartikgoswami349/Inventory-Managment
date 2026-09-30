@@ -1,19 +1,27 @@
 {
   "name": "r58-inventory-pc",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "R58 Inventory Windows desktop peer for the existing Android app",
+  "author": "R58 Inventory",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "start": "electron-vite preview"
+    "build:msi": "cross-env R58_AUTO_UPDATE=false electron-vite build",
+    "start": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never && npm run build:msi && electron-builder --win msi --x64 --publish never",
+    "publish:win": "npm run build && electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
     "@vitejs/plugin-react": "5.1.4",
     "better-sqlite3": "13.0.3",
     "bonjour-service": "1.4.4",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
+    "fflate": "^0.8.3",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -23,9 +31,64 @@
     "@types/node": "24.0.15",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
-    "electron": "41.5.2",
+    "cross-env": "^10.1.0",
+    "electron": "^41.10.7",
+    "electron-builder": "^26.15.3",
     "electron-vite": "5.0.0",
     "typescript": "5.9.3",
     "vite": "7.3.6"
+  },
+  "build": {
+    "appId": "com.r58inventory.pc",
+    "productName": "R58 Inventory",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "npmRebuild": true,
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "R58-Inventory-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "msi": {
+      "perMachine": false,
+      "createDesktopShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kartikgoswami349",
+        "repo": "Inventory-Managment",
+        "releaseType": "release"
+      }
+    ]
   }
 }

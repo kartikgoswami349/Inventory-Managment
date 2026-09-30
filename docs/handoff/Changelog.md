@@ -62,6 +62,36 @@ Current development objective
 
 Complete the PC application so that its supported feature set and business behavior match the Mobile application as closely as practical on Windows.
 
+Current implementation checkpoint
+
+The PC inventory screen now opens a dedicated Add New Item form rather than embedding item creation in the inventory sheet. It follows the Mobile sequential Stock ID and opening-ledger behavior.
+
+The PC transaction workflow now supports Issue and Receive, department/person selection (including Other), remarks, and per-item Add One / Remove One / Remove All quantity controls. A transaction batch is committed atomically after active-item and current-stock checks; local writes remain successful without waiting for synchronization.
+
+No Mobile files, database schema, sync packet fields/version, transport, port, pairing/authentication rules, or immutable transaction/audit semantics were changed. The repository root package manifest's UTF-8 BOM was removed because Vite's PostCSS config discovery rejected it and could not complete the PC build.
+
+The roadmap below lists proposed milestones without assigning phase numbers. Per owner direction, this work treats the next named milestone, Audit parity, as Phase 4.
+
+Phase 4 — PC audit parity
+
+The PC can search/select an active inventory item, record physical quantity and an optional remark, display the system quantity and live variance, save an audit without adjusting stock, or explicitly save and adjust stock. Audit plus optional `AUDIT_ADJUSTMENT` transaction are committed in one local database transaction. The PC exposes audit history, and successful local audit writes request background synchronization. This uses the existing immutable audit and transaction record IDs and packet format; no schema or protocol change was made. Desktop uses search-based item selection rather than the Mobile camera scanner.
+
+Phase 5 — PC dashboard parity
+
+The dashboard now mirrors the Mobile dashboard's inventory health counts (in stock, low stock, and out of stock), today's transaction/issue/receive/audit activity, and Inventory/Audit/Transactions/Device & Sync quick actions. Health is computed for active items from the transaction ledger using the same category boundaries as Mobile. Today's activity uses local-calendar-day boundaries converted to ISO timestamps; total transactions include all ledger transaction types, while issued/received count only matching transaction types. Existing PC total stock, total lifetime transaction/audit counts, and inventory/recent-transaction snapshots remain available.
+
+Phase 6 — PC backup, restore, and data tools
+
+The PC offers a portable SQLite backup-to-file, validated SQLite restore with an automatic pre-restore recovery backup in the PC app data folder, SQLite merge import that applies existing R58 mutable revision and immutable-ID rules, an Excel workbook with Inventory/Transactions/Audits worksheets, and manual JSON sync-packet import/export using the existing version-1 packet. Restore deduplicates source sync metadata using the established revision/time/device conflict ordering and upserts it after business records, so pre-existing source-style triggers cannot cause metadata-key collisions. Manual packet application rejects conflicting Stock IDs/QR codes and accepts transaction packets that omit PC-only optional fields. SQLite restore/import preserve the PC's local device identity and trusted-device settings. Restore is replacement; SQLite import and JSON import are merge operations. Manual JSON transfers do not authenticate their source, unlike paired LAN sync. No schema or packet-format changes were made.
+
+PC department and people management
+
+The PC now has a dedicated Departments screen to add departments and their people, remove people from future selections, and deactivate a department together with its people. Deactivation is soft: historical transaction records are retained. New and changed master records update the existing R58 sync metadata and request background sync; no schema or protocol changes were made.
+
+Windows production packaging, updating, and diagnostics
+
+Added x64 NSIS and MSI installer targets. `better-sqlite3` is rebuilt for Electron during packaging and unpacked from ASAR. NSIS installs support GitHub-release auto-update checks/downloads; MSI installs deliberately disable that updater because the updater is for NSIS and require installing a newer MSI manually. Main-process output, IPC failures, unhandled errors, updater events, and renderer crashes/load failures are persisted with `electron-log`, and the Device & Sync page can open the log folder. Both installers built successfully; the packaged app launched and its Electron-native SQLite binary was present. The NSIS update manifest was checked against the generated installer name. Release publishing requires a configured GitHub release and `GH_TOKEN`; live update testing, code signing, and clean-machine Windows installation/sync validation remain release gates.
+
 Known engineering preferences
 
 preserve working behavior;
