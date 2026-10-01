@@ -15,6 +15,14 @@ declare global {
         minimumStock: number;
         openingQuantity: number;
       }): Promise<{ id: string; stockId: string }>;
+      deactivateInventoryItem(itemId: string): Promise<{ success: boolean }>;
+      updateInventoryItem(input: {
+        itemId: string;
+        oldItemId: string;
+        itemName: string;
+        unit: string;
+        minimumStock: number;
+      }): Promise<{ id: string; itemName: string }>;
       getDepartments(): Promise<Array<{ id: string; name: string }>>;
       createDepartment(name: string): Promise<{ id: string; name: string }>;
       deactivateDepartment(departmentId: string): Promise<{ success: boolean }>;

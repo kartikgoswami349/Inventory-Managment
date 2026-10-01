@@ -1,6 +1,6 @@
 {
   "name": "r58-inventory-pc",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "R58 Inventory Windows desktop peer for the existing Android app",
   "author": "R58 Inventory",

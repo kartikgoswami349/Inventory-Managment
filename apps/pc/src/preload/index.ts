@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('r58', {
     minimumStock: number;
     openingQuantity: number;
   }) => ipcRenderer.invoke('inventory:create', input),
+  deactivateInventoryItem: (itemId: string) => ipcRenderer.invoke('inventory:deactivate', itemId),
+  updateInventoryItem: (input: {
+    itemId: string;
+    oldItemId: string;
+    itemName: string;
+    unit: string;
+    minimumStock: number;
+  }) => ipcRenderer.invoke('inventory:update', input),
   getDepartments: () => ipcRenderer.invoke('departments:get'),
   createDepartment: (name: string) => ipcRenderer.invoke('departments:create', name),
   deactivateDepartment: (departmentId: string) => ipcRenderer.invoke('departments:deactivate', departmentId),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import r58Logo from './assets/r58-logo.png';
 
-type Page = 'dashboard' | 'inventory' | 'add-item' | 'transactions' | 'new-transaction' | 'departments' | 'audits' | 'data-tools' | 'sync';
+type Page = 'dashboard' | 'inventory' | 'add-item' | 'edit-item' | 'transactions' | 'new-transaction' | 'departments' | 'audits' | 'data-tools' | 'sync';
 type UpdateStatus = { state: string; message: string; percent?: number; version?: string };
 
 type InventoryRow = {
@@ -38,6 +39,7 @@ type TransactionRow = {
   transaction_type: string;
   quantity: number;
   stock_delta: number;
+  stock_after: number;
   department_name: string | null;
   person_name: string | null;
   other_name: string | null;
@@ -77,10 +79,12 @@ export default function App() {
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
+  const [editingItem, setEditingItem] = useState<InventoryRow | null>(null);
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [itemToDelete, setItemToDelete] = useState<InventoryRow | null>(null);
   const [pairHost, setPairHost] = useState('');
   const [pairCode, setPairCode] = useState('');
   const [pcPairCode, setPcPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
@@ -365,6 +369,60 @@ export default function App() {
       setNextStockId(await window.r58.getNextStockId());
       setPage('inventory');
       setMessage(`Created ${newItem.itemName.trim()} as ${result.stockId}.`);
+      await refreshAll();
+    } catch (error: any) {
+      setMessage(error?.message ?? String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEditInventoryItem(item: InventoryRow) {
+    setNewItem({
+      oldItemId: item.old_item_id ?? '',
+      itemName: item.item_name,
+      unit: item.unit,
+      minimumStock: String(item.minimum_stock),
+      openingQuantity: '0',
+    });
+    setItemToDelete(null);
+    setPage('edit-item');
+  }
+
+  async function saveEditedItem() {
+    const minimumStock = Number(newItem.minimumStock);
+    if (!editingItem || !Number.isFinite(minimumStock) || minimumStock < 0) {
+      setMessage(!editingItem ? 'Select an inventory item to edit.' : 'Minimum stock must be zero or greater.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await window.r58.updateInventoryItem({
+        itemId: editingItem.id,
+        oldItemId: newItem.oldItemId,
+        itemName: newItem.itemName,
+        unit: newItem.unit,
+        minimumStock,
+      });
+      setEditingItem(null);
+      setPage('inventory');
+      setMessage(`Updated "${result.itemName}".`);
+      await refreshAll();
+    } catch (error: any) {
+      setMessage(error?.message ?? String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeInventoryItem(item: InventoryRow) {
+    setBusy(true);
+    setMessage('');
+    try {
+      await window.r58.deactivateInventoryItem(item.id);
+      setItemToDelete(null);
+      setMessage(`"${item.item_name}" was removed from active inventory. Existing history was retained.`);
       await refreshAll();
     } catch (error: any) {
       setMessage(error?.message ?? String(error));
@@ -709,7 +767,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">R58</div>
+          <img className="brand-mark" src={r58Logo} alt="Shri Siddhdata Ashram logo" />
           <div>
             <div className="brand-title">R58 Inventory</div>
             <div className="brand-sub">Windows</div>
@@ -717,7 +775,7 @@ export default function App() {
         </div>
         <nav>
           <NavButton icon="⌂" label="Dashboard" active={page === 'dashboard'} onClick={() => setPage('dashboard')} />
-          <NavButton icon="▦" label="Inventory" active={page === 'inventory' || page === 'add-item'} onClick={() => setPage('inventory')} />
+          <NavButton icon="▦" label="Inventory" active={page === 'inventory' || page === 'add-item' || page === 'edit-item'} onClick={() => setPage('inventory')} />
           <NavButton icon="↕" label="Transactions" active={page === 'transactions' || page === 'new-transaction'} onClick={() => setPage('transactions')} />
           <NavButton icon="♙" label="Departments" active={page === 'departments'} onClick={() => setPage('departments')} />
           <NavButton icon="✓" label="Stock Audit" active={page === 'audits'} onClick={() => setPage('audits')} />
@@ -734,7 +792,7 @@ export default function App() {
         <header className="topbar">
           <div>
             <div className="page-eyebrow">R58 INVENTORY</div>
-            <h1>{page === 'dashboard' ? 'Dashboard' : page === 'inventory' ? 'Inventory' : page === 'add-item' ? 'Add New Item' : page === 'transactions' ? 'Transactions' : page === 'new-transaction' ? 'New Transaction' : page === 'departments' ? 'Department Management' : page === 'audits' ? 'Stock Audit' : page === 'data-tools' ? 'Backup & Data Tools' : 'Device & Sync'}</h1>
+            <h1>{page === 'dashboard' ? 'Dashboard' : page === 'inventory' ? 'Inventory' : page === 'add-item' ? 'Add New Item' : page === 'edit-item' ? 'Edit Inventory Item' : page === 'transactions' ? 'Transactions' : page === 'new-transaction' ? 'New Transaction' : page === 'departments' ? 'Department Management' : page === 'audits' ? 'Stock Audit' : page === 'data-tools' ? 'Backup & Data Tools' : 'Device & Sync'}</h1>
           </div>
           <div className="top-actions">
             <button className="ghost-btn" onClick={refresh} disabled={busy}>↻ Refresh</button>
@@ -812,23 +870,40 @@ export default function App() {
               <button className="primary-btn" onClick={() => setPage('add-item')}>＋ Add New Item</button>
             </div>
             <div className="panel table-panel">
-              <TableInventory rows={inventory} />
+              <TableInventory
+                rows={inventory}
+                onEdit={startEditInventoryItem}
+                onDelete={setItemToDelete}
+                busy={busy}
+              />
             </div>
+            {itemToDelete && (
+              <div className="confirm-backdrop" role="presentation">
+                <div className="panel confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-item-title">
+                  <div className="panel-head"><div><h3 id="delete-item-title">Delete inventory item?</h3><span>{itemToDelete.stock_id} · {itemToDelete.item_name}</span></div></div>
+                  <p>It will be removed from active inventory and unavailable for future transactions. Existing transaction and audit history will be retained.</p>
+                  <div className="form-actions">
+                    <button className="secondary-btn" onClick={() => setItemToDelete(null)} disabled={busy}>Cancel</button>
+                    <button className="danger-btn" onClick={() => void removeInventoryItem(itemToDelete)} disabled={busy}>{busy ? 'Deleting…' : 'Delete Item'}</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
-        {page === 'add-item' && (
+        {(page === 'add-item' || page === 'edit-item') && (
           <section className="content">
             <div className="panel item-form-panel">
               <div className="panel-head">
-                <div><h3>Create inventory item</h3><span>New items receive the next sequential Stock ID.</span></div>
+                <div><h3>{page === 'edit-item' ? 'Edit inventory item' : 'Create inventory item'}</h3><span>{page === 'edit-item' ? 'Update item details. Stock quantity changes are recorded through transactions.' : 'New items receive the next sequential Stock ID.'}</span></div>
                 <button className="text-btn" onClick={() => setPage('inventory')}>← Back to Inventory</button>
               </div>
-              <div className="next-stock-card">
+              {page === 'edit-item' ? <div className="next-stock-card"><span className="small-label">STOCK ID</span><strong>{editingItem?.stock_id}</strong><span>Stock ID and current quantity cannot be changed here.</span></div> : <div className="next-stock-card">
                 <span className="small-label">NEXT STOCK / QR ID</span>
                 <strong>{nextStockId || 'Loading…'}</strong>
                 <span>Generated automatically when saved</span>
-              </div>
+              </div>}
               <div className="form-grid item-form-grid">
                 <div>
                   <label htmlFor="old-item-id">Existing / Group Item ID</label>
@@ -843,21 +918,19 @@ export default function App() {
                   <label htmlFor="item-unit">Unit *</label>
                   <input id="item-unit" className="field" value={newItem.unit} onChange={event => setNewItem(current => ({ ...current, unit: event.target.value }))} placeholder="Pcs / Roll / Kg / Meter" />
                 </div>
-                <div className="number-field-row">
-                  <div>
-                    <label htmlFor="opening-quantity">Opening Quantity</label>
-                    <input id="opening-quantity" className="field" type="number" min="0" step="any" value={newItem.openingQuantity} onChange={event => setNewItem(current => ({ ...current, openingQuantity: event.target.value }))} />
-                  </div>
-                  <div>
-                    <label htmlFor="minimum-stock">Minimum Stock</label>
-                    <input id="minimum-stock" className="field" type="number" min="0" step="any" value={newItem.minimumStock} onChange={event => setNewItem(current => ({ ...current, minimumStock: event.target.value }))} />
-                  </div>
+                {page === 'add-item' && <div>
+                  <label htmlFor="opening-quantity">Opening Quantity</label>
+                  <input id="opening-quantity" className="field" type="number" min="0" step="any" value={newItem.openingQuantity} onChange={event => setNewItem(current => ({ ...current, openingQuantity: event.target.value }))} />
+                </div>}
+                <div>
+                  <label htmlFor="minimum-stock">Minimum Stock</label>
+                  <input id="minimum-stock" className="field" type="number" min="0" step="any" value={newItem.minimumStock} onChange={event => setNewItem(current => ({ ...current, minimumStock: event.target.value }))} />
                 </div>
               </div>
-              <div className="form-footnote">Opening quantity is recorded once as an opening ledger entry. Future stock changes should use Receive or Issue.</div>
+              <div className="form-footnote">{page === 'edit-item' ? 'To change this item’s quantity, create a Receive or Issue transaction or perform a stock audit.' : 'Opening quantity is recorded once as an opening ledger entry. Future stock changes should use Receive or Issue.'}</div>
               <div className="form-actions">
                 <button className="secondary-btn" onClick={() => setPage('inventory')} disabled={busy}>Cancel</button>
-                <button className="primary-btn" onClick={saveNewItem} disabled={busy || !nextStockId}>{busy ? 'Creating Item…' : 'Create Item'}</button>
+                <button className="primary-btn" onClick={page === 'edit-item' ? saveEditedItem : saveNewItem} disabled={busy || (page === 'add-item' && !nextStockId)}>{busy ? (page === 'edit-item' ? 'Saving…' : 'Creating Item…') : (page === 'edit-item' ? 'Save Changes' : 'Create Item')}</button>
               </div>
             </div>
           </section>
@@ -1288,11 +1361,13 @@ function HealthMetric({ title, value, kind }: { title: string; value: string | n
 }
 
 function ActivityMetric({ title, value, symbol }: { title: string; value: string | number; symbol: string }) {
-  return <div className="activity-metric"><span className="activity-symbol">{symbol}</span><div><strong>{value}</strong><span>{title}</span></div></div>;
+  const kind = title === 'Issued' ? 'issued' : title === 'Received' ? 'received' : title === 'Audits' ? 'audits' : 'transactions';
+  return <div className="activity-metric"><span className={`activity-symbol ${kind}`}>{symbol}</span><div><strong>{value}</strong><span>{title}</span></div></div>;
 }
 
 function QuickAction({ title, subtitle, symbol, onClick }: { title: string; subtitle: string; symbol: string; onClick: () => void }) {
-  return <button className="quick-action" onClick={onClick}><span className="quick-action-icon">{symbol}</span><span className="quick-action-copy"><strong>{title}</strong><small>{subtitle}</small></span><span className="quick-action-arrow">›</span></button>;
+  const kind = title.startsWith('Inventory') ? 'inventory' : title.startsWith('Audit') ? 'audit' : title.startsWith('Transactions') ? 'transactions' : title.startsWith('Departments') ? 'departments' : title.startsWith('Backup') ? 'backup' : 'sync';
+  return <button className="quick-action" onClick={onClick}><span className={`quick-action-icon ${kind}`}>{symbol}</span><span className="quick-action-copy"><strong>{title}</strong><small>{subtitle}</small></span><span className="quick-action-arrow">›</span></button>;
 }
 
 function DataToolCard({ title, description, buttonLabel, onClick, secondaryLabel, onSecondaryClick, disabled, danger = false }: {
@@ -1324,12 +1399,12 @@ function MiniTransactions({ rows }: { rows: TransactionRow[] }) {
   return <div className="mini-list">{rows.length ? rows.map(row => <div className="mini-row" key={row.id}><div><strong>{row.item_name}</strong><span>{row.transaction_type}</span></div><b className={Number(row.stock_delta) >= 0 ? 'delta-positive' : 'delta-negative'}>{Number(row.stock_delta) > 0 ? '+' : ''}{Number(row.stock_delta)} {row.unit}</b></div>) : <div className="empty">No transactions yet.</div>}</div>;
 }
 
-function TableInventory({ rows }: { rows: InventoryRow[] }) {
-  return <table><thead><tr><th>Stock ID</th><th>Item</th><th>Old ID</th><th>Unit</th><th>Current Stock</th><th>Min</th><th>Status</th></tr></thead><tbody>{rows.map(row => { const low = Number(row.current_stock) <= Number(row.minimum_stock); return <tr key={row.id}><td className="mono">{row.stock_id}</td><td><strong>{row.item_name}</strong></td><td>{row.old_item_id || '—'}</td><td>{row.unit}</td><td><strong>{Number(row.current_stock)}</strong></td><td>{Number(row.minimum_stock)}</td><td><span className={`status ${low ? 'low' : 'ok'}`}>{low ? 'Low stock' : 'In stock'}</span></td></tr>; })}</tbody></table>;
+function TableInventory({ rows, onEdit, onDelete, busy }: { rows: InventoryRow[]; onEdit: (item: InventoryRow) => void; onDelete: (item: InventoryRow) => void; busy: boolean }) {
+  return <table><thead><tr><th>Stock ID</th><th>Item</th><th>Old ID</th><th>Unit</th><th>Current Stock</th><th>Min</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map(row => { const low = Number(row.current_stock) <= Number(row.minimum_stock); return <tr key={row.id}><td className="mono">{row.stock_id}</td><td><strong>{row.item_name}</strong></td><td>{row.old_item_id || '—'}</td><td>{row.unit}</td><td><strong>{Number(row.current_stock)}</strong></td><td>{Number(row.minimum_stock)}</td><td><span className={`status ${low ? 'low' : 'ok'}`}>{low ? 'Low stock' : 'In stock'}</span></td><td><div className="inventory-actions"><button className="secondary-btn small-btn" onClick={() => onEdit(row)} disabled={busy}>Edit</button><button className="danger-btn small-btn" onClick={() => onDelete(row)} disabled={busy}>Delete</button></div></td></tr>; })}{!rows.length && <tr><td colSpan={8} className="empty">No active inventory items.</td></tr>}</tbody></table>;
 }
 
 function TableTransactions({ rows }: { rows: TransactionRow[] }) {
-  return <table><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Change</th><th>Department</th><th>Person</th><th>Remark</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{formatDate(row.timestamp)}</td><td><strong>{row.item_name}</strong><span className="sub-cell">{row.stock_id}</span></td><td>{row.transaction_type}</td><td className={Number(row.stock_delta) >= 0 ? 'delta-positive' : 'delta-negative'}>{Number(row.stock_delta) > 0 ? '+' : ''}{Number(row.stock_delta)} {row.unit}</td><td>{row.department_name || '—'}</td><td>{row.person_name || row.other_name || '—'}</td><td>{row.remark || '—'}</td></tr>)}</tbody></table>;
+  return <table><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Change</th><th>Stock After</th><th>Department</th><th>Person</th><th>Remark</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{formatDate(row.timestamp)}</td><td><strong>{row.item_name}</strong><span className="sub-cell">{row.stock_id}</span></td><td>{row.transaction_type}</td><td className={Number(row.stock_delta) >= 0 ? 'delta-positive' : 'delta-negative'}>{Number(row.stock_delta) > 0 ? '+' : ''}{Number(row.stock_delta)} {row.unit}</td><td><strong>{Number(row.stock_after)} {row.unit}</strong></td><td>{row.department_name || '—'}</td><td>{row.person_name || row.other_name || '—'}</td><td>{row.remark || '—'}</td></tr>)}</tbody></table>;
 }
 
 function TableAudits({ rows }: { rows: AuditRow[] }) {

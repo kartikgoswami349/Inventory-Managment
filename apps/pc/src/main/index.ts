@@ -9,8 +9,10 @@ import {
   createInventoryTransactions,
   createDepartment,
   createPerson,
+  deactivateInventoryItem,
   deactivateDepartment,
   deactivatePerson,
+  updateInventoryItem,
   getDb,
   getDashboard,
   getDepartments,
@@ -170,6 +172,16 @@ function registerIpc() {
   ipcMain.handle('inventory:next-stock-id', () => getNextStockId());
   ipcMain.handle('inventory:create', (_event, input) => {
     const result = createInventoryItem(input);
+    requestImmediateSync();
+    return result;
+  });
+  ipcMain.handle('inventory:deactivate', (_event, itemId: string) => {
+    deactivateInventoryItem(String(itemId ?? ''));
+    requestImmediateSync();
+    return { success: true };
+  });
+  ipcMain.handle('inventory:update', (_event, input) => {
+    const result = updateInventoryItem(input);
     requestImmediateSync();
     return result;
   });

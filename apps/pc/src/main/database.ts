@@ -27,6 +27,14 @@ export type NewInventoryItemInput = {
   openingQuantity: number;
 };
 
+export type UpdateInventoryItemInput = {
+  itemId: string;
+  oldItemId: string;
+  itemName: string;
+  unit: string;
+  minimumStock: number;
+};
+
 export type InventoryTransactionInput = {
   type: 'ISSUED' | 'RECEIVED';
   items: Array<{ itemId: string; quantity: number }>;
@@ -223,6 +231,34 @@ export function createInventoryItem(input: NewInventoryItemInput): { id: string;
   return create();
 }
 
+export function updateInventoryItem(input: UpdateInventoryItemInput) {
+  const oldItemId = input.oldItemId.trim();
+  const itemName = input.itemName.trim();
+  const unit = input.unit.trim();
+  if (!input.itemId.trim()) throw new Error('Select an inventory item to update.');
+  if (!itemName) throw new Error('Item name is required.');
+  if (!unit) throw new Error('Unit is required.');
+  if (!Number.isFinite(input.minimumStock) || input.minimumStock < 0) {
+    throw new Error('Minimum stock must be zero or greater.');
+  }
+
+  const database = getDb();
+  const modifiedAt = new Date().toISOString();
+  const deviceId = getDevice().id;
+  const update = database.transaction(() => {
+    const item = database.prepare('SELECT id FROM items WHERE id = ? AND active = 1').get(input.itemId);
+    if (!item) throw new Error('The selected inventory item is no longer active.');
+    database.prepare(`
+      UPDATE items
+      SET old_item_id = ?, item_name = ?, unit = ?, minimum_stock = ?, updated_at = ?
+      WHERE id = ?
+    `).run(oldItemId || null, itemName, unit, input.minimumStock, modifiedAt, input.itemId);
+    updateLocalSyncMetadata('ITEM', input.itemId, modifiedAt, deviceId);
+    return { id: input.itemId, itemName };
+  });
+  return update();
+}
+
 export function getDepartments(): Array<{ id: string; name: string }> {
   return getDb().prepare(`
     SELECT id, name FROM departments WHERE active = 1 ORDER BY name COLLATE NOCASE
@@ -238,7 +274,7 @@ export function getPeopleByDepartment(departmentId: string): Array<{ id: string;
   `).all(departmentId) as Array<{ id: string; department_id: string; name: string }>;
 }
 
-function updateLocalSyncMetadata(entityType: 'DEPARTMENT' | 'PERSON', entityId: string, modifiedAt: string, deviceId: string) {
+function updateLocalSyncMetadata(entityType: 'ITEM' | 'DEPARTMENT' | 'PERSON', entityId: string, modifiedAt: string, deviceId: string) {
   getDb().prepare(`
     INSERT INTO sync_records (entity_type, entity_id, revision, modified_at, modified_by_device, deleted)
     VALUES (?, ?, 1, ?, ?, 0)
@@ -248,6 +284,20 @@ function updateLocalSyncMetadata(entityType: 'DEPARTMENT' | 'PERSON', entityId: 
       modified_by_device = excluded.modified_by_device,
       deleted = 0
   `).run(entityType, entityId, modifiedAt, deviceId);
+}
+
+export function deactivateInventoryItem(itemId: string) {
+  if (!itemId.trim()) throw new Error('Select an inventory item to delete.');
+  const database = getDb();
+  const modifiedAt = new Date().toISOString();
+  const deviceId = getDevice().id;
+  const deactivate = database.transaction(() => {
+    const item = database.prepare('SELECT id FROM items WHERE id = ? AND active = 1').get(itemId);
+    if (!item) throw new Error('The selected inventory item is no longer active.');
+    database.prepare('UPDATE items SET active = 0, updated_at = ? WHERE id = ?').run(modifiedAt, itemId);
+    updateLocalSyncMetadata('ITEM', itemId, modifiedAt, deviceId);
+  });
+  deactivate();
 }
 
 export function createDepartment(name: string) {
@@ -656,27 +706,37 @@ export function getInventory(search = '') {
 export function getTransactions(limit = 300) {
   return getDb().prepare(`
     SELECT
-      t.id,
-      t.item_id,
+      ledger.id,
+      ledger.item_id,
       i.stock_id,
       i.item_name,
       i.unit,
-      t.transaction_type,
-      t.quantity,
-      t.stock_delta,
-      t.department_id,
+      ledger.transaction_type,
+      ledger.quantity,
+      ledger.stock_delta,
+      ledger.stock_after,
+      ledger.department_id,
       d.name AS department_name,
-      t.person_id,
+      ledger.person_id,
       p.name AS person_name,
-      t.other_name,
-      t.remark,
-      t.timestamp,
-      t.device_id
-    FROM transactions t
-    LEFT JOIN items i ON i.id = t.item_id
-    LEFT JOIN departments d ON d.id = t.department_id
-    LEFT JOIN people p ON p.id = t.person_id
-    ORDER BY t.timestamp DESC
+      ledger.other_name,
+      ledger.remark,
+      ledger.timestamp,
+      ledger.device_id
+    FROM (
+      SELECT
+        t.*,
+        SUM(t.stock_delta) OVER (
+          PARTITION BY t.item_id
+          ORDER BY t.timestamp, t.id
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS stock_after
+      FROM transactions t
+    ) ledger
+    LEFT JOIN items i ON i.id = ledger.item_id
+    LEFT JOIN departments d ON d.id = ledger.department_id
+    LEFT JOIN people p ON p.id = ledger.person_id
+    ORDER BY ledger.timestamp DESC, ledger.id DESC
     LIMIT ?
   `).all(limit) as Array<Record<string, unknown>>;
 }
