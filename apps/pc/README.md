@@ -33,14 +33,9 @@ The Windows peer uses the same protocol values verified from the existing R58 An
 - Transaction history view.
 - Dashboard with synced inventory totals.
 
-## What is deliberately not included yet
+## Current PC functionality
 
-- Add/edit/deactivate item UI.
-- Issue/Receive/Audit workflow on PC.
-- Excel export.
-- Installer/production packaging.
-
-The local database, two-way sync, nearby discovery, and automatic sync are included in this Phase 2B build.
+The Windows app includes local inventory item creation, Issue/Receive transactions, department and people management, stock audits, dashboard metrics, database backup/restore/import, Excel export, manual JSON transfer, two-way sync, nearby discovery, and automatic sync.
 
 ## Run on Windows
 
@@ -110,3 +105,25 @@ If mDNS discovery is unavailable on a particular Wi-Fi/router, manual IP pairing
 The Device & Sync page now includes **Forget trusted device**. Forgetting a device removes its local trust record and sync-peer entry on the PC, so automatic sync will no longer run for that device. Inventory, item, transaction, and audit data already stored on the PC are not deleted.
 
 Forgetting on the PC does **not** erase the PC from the Android device's trusted-device list; the two sides can be paired again later.
+
+## Windows production build
+
+From this directory on Windows, install dependencies and build both x64 installers:
+
+```powershell
+npm.cmd install
+npm.cmd run dist:win
+```
+
+The output is in `release/`. The interactive NSIS installer is the recommended distribution and supports automatic updates. The MSI is a manual-update alternative; Windows MSI installs explicitly disable the NSIS updater and receive updates by installing a newer MSI. Native `better-sqlite3` is rebuilt for Electron during packaging and unpacked from `app.asar` so its `.node` binary can load.
+
+To build and publish an NSIS update release to the configured GitHub repository, update the PC app version, create/publish the corresponding GitHub release, and run:
+
+```powershell
+$env:GH_TOKEN = "<GitHub token with release access>"
+npm.cmd run publish:win
+```
+
+Keep release tokens out of source control and clear `$env:GH_TOKEN` after publishing. The app checks for updates at startup and every six hours; users can also check manually from **Device & Sync**. A downloaded update waits for the user to restart. Code signing is not configured: unsigned installers may show Windows SmartScreen warnings until the publisher signs them.
+
+Main-process, sync/discovery, IPC, uncaught exception, unhandled rejection, and renderer crash/load errors are recorded by `electron-log` in the app's per-user logs folder. Open it from **Device & Sync → Open Error Logs**.
