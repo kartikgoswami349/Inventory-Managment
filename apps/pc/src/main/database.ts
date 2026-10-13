@@ -164,7 +164,6 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_items_old_id ON items(old_item_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_item ON transactions(item_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_transactions_area ON transactions(area_id);
   `);
 
   const transactionColumns = new Set(
@@ -173,6 +172,7 @@ export function getDb(): Database.Database {
   if (!transactionColumns.has('area_id')) {
     db.exec('ALTER TABLE transactions ADD COLUMN area_id TEXT');
   }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_area ON transactions(area_id)');
   db.prepare(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('area_required', '0')`).run();
 
   const existing = db.prepare('SELECT device_id, device_name FROM local_device WHERE id = 1').get() as DeviceInfo | undefined;
