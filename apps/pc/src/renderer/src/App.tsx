@@ -194,6 +194,16 @@ export default function App() {
   }, [page]);
 
   useEffect(() => {
+    if (page !== 'areas') return;
+    Promise.all([window.r58.getAreas(), window.r58.getAreaRequired()])
+      .then(([rows, required]) => {
+        setAreas(rows);
+        setAreaRequired(required);
+      })
+      .catch(error => setMessage(error?.message ?? String(error)));
+  }, [page]);
+
+  useEffect(() => {
     if (page !== 'departments') return;
     window.r58.getDepartments()
       .then(rows => {
@@ -1077,42 +1087,43 @@ export default function App() {
                   <div className="empty department-empty">Select a department to add or manage its people.</div>
                 )}
 
-                {page === 'areas' && (
-                  <section className="content department-page">
-                    <div className="department-layout">
-                      <div className="panel">
-                        <div className="panel-head">
-                          <div><h3>Area Directory</h3><span>Manage destinations used by Issue / Receive transactions.</span></div>
-                        </div>
-                        <div className="department-add-row">
-                          <input className="field" aria-label="New area name" value={newAreaName} onChange={event => setNewAreaName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void addArea(); }} placeholder="Area name" />
-                          <button className="primary-btn" onClick={() => void addArea()} disabled={busy || !newAreaName.trim()}>＋ Add</button>
-                        </div>
-                        <div className="department-list">
-                          {areas.map(area => (
-                            <div className="person-row" key={area.id}>
-                              <strong>{area.name}</strong>
-                              <button className="text-btn" onClick={() => void removeArea(area.id, area.name)} disabled={busy}>Remove</button>
-                            </div>
-                          ))}
-                          {!areas.length && <div className="empty">No active areas yet. Add one to get started.</div>}
-                        </div>
-                      </div>
-                      <div className="panel">
-                        <div className="panel-head">
-                          <div><h3>Transaction setting</h3><span>When OFF, the area selector is hidden completely.</span></div>
-                        </div>
-                        <label className="setting-toggle">
-                          <input type="checkbox" checked={areaRequired} onChange={event => void toggleAreaRequired(event.target.checked)} />
-                          <span>{areaRequired ? 'ON — require an area before saving' : 'OFF — do not ask for an area'}</span>
-                        </label>
-                      </div>
-                    </div>
-                  </section>
-                )}
               </div>
             </div>
             <div className="form-footnote">Deleting departments or people removes them from future selections only. Existing transaction records remain unchanged.</div>
+          </section>
+        )}
+
+        {page === 'areas' && (
+          <section className="content department-page">
+            <div className="department-layout">
+              <div className="panel">
+                <div className="panel-head">
+                  <div><h3>Area Directory</h3><span>Manage destinations used by Issue / Receive transactions.</span></div>
+                </div>
+                <div className="department-add-row">
+                  <input className="field" aria-label="New area name" value={newAreaName} onChange={event => setNewAreaName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void addArea(); }} placeholder="Area name" />
+                  <button className="primary-btn" onClick={() => void addArea()} disabled={busy || !newAreaName.trim()}>＋ Add</button>
+                </div>
+                <div className="department-list">
+                  {areas.map(area => (
+                    <div className="person-row" key={area.id}>
+                      <strong>{area.name}</strong>
+                      <button className="text-btn" onClick={() => void removeArea(area.id, area.name)} disabled={busy}>Remove</button>
+                    </div>
+                  ))}
+                  {!areas.length && <div className="empty">No active areas yet. Add one to get started.</div>}
+                </div>
+              </div>
+              <div className="panel">
+                <div className="panel-head">
+                  <div><h3>Transaction setting</h3><span>When OFF, the area selector is hidden completely.</span></div>
+                </div>
+                <label className="setting-toggle">
+                  <input type="checkbox" checked={areaRequired} onChange={event => void toggleAreaRequired(event.target.checked)} />
+                  <span>{areaRequired ? 'ON — require an area before saving' : 'OFF — do not ask for an area'}</span>
+                </label>
+              </div>
+            </div>
           </section>
         )}
 

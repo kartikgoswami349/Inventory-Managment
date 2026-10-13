@@ -80,8 +80,6 @@ ON transactions(item_id);
 
 CREATE INDEX IF NOT EXISTS idx_transactions_timestamp
 ON transactions(timestamp);
-CREATE INDEX IF NOT EXISTS idx_transactions_area
-ON transactions(area_id);
 
 CREATE INDEX IF NOT EXISTS idx_audits_item
 ON audits(item_id);

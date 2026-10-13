@@ -59,25 +59,29 @@ async function openR58Database() {
     // Column already exists.
   }
 
-  for (const statement of [
-    `ALTER TABLE transactions ADD COLUMN area_id TEXT REFERENCES areas(id);`,
-    `CREATE TABLE IF NOT EXISTS areas (
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS areas (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT UNIQUE NOT NULL,
       active INTEGER NOT NULL DEFAULT 1
-    );`,
-    `CREATE TABLE IF NOT EXISTS app_settings (
+    );
+    CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL
-    );`,
-    `CREATE INDEX IF NOT EXISTS idx_transactions_area ON transactions(area_id);`,
-  ]) {
-    try {
-      await db.execAsync(statement);
-    } catch {
-      // Additive migration already applied.
-    }
+    );
+  `);
+
+  const transactionColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(transactions)',
+  );
+  if (!transactionColumns.some(column => column.name === 'area_id')) {
+    await db.execAsync(
+      'ALTER TABLE transactions ADD COLUMN area_id TEXT REFERENCES areas(id);',
+    );
   }
+  await db.execAsync(
+    'CREATE INDEX IF NOT EXISTS idx_transactions_area ON transactions(area_id);',
+  );
 
   await db.runAsync(
     `INSERT OR IGNORE INTO app_settings (key, value) VALUES ('area_required', '0')`
