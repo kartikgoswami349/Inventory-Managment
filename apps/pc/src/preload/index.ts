@@ -18,11 +18,17 @@ contextBridge.exposeInMainWorld('r58', {
   createPerson: (departmentId: string, name: string) => ipcRenderer.invoke('people:create', departmentId, name),
   deactivatePerson: (personId: string) => ipcRenderer.invoke('people:deactivate', personId),
   getPeopleByDepartment: (departmentId: string) => ipcRenderer.invoke('people:get-by-department', departmentId),
+  getAreas: () => ipcRenderer.invoke('areas:get'),
+  createArea: (name: string) => ipcRenderer.invoke('areas:create', name),
+  deactivateArea: (areaId: string) => ipcRenderer.invoke('areas:deactivate', areaId),
+  getAreaRequired: () => ipcRenderer.invoke('areas:required:get'),
+  setAreaRequired: (required: boolean) => ipcRenderer.invoke('areas:required:set', required),
   createInventoryTransactions: (input: {
     type: 'ISSUED' | 'RECEIVED';
     items: Array<{ itemId: string; quantity: number }>;
     departmentId: string;
     personId: string | null;
+    areaId: string | null;
     otherName: string | null;
     remark: string;
   }) => ipcRenderer.invoke('transactions:create', input),

@@ -11,6 +11,7 @@ export interface SyncStats {
   items: number;
   departments: number;
   people: number;
+  areas: number;
   transactions: number;
   audits: number;
 
@@ -134,6 +135,21 @@ export async function bootstrapSyncIndex():
 
 
       /*
+        Existing Areas
+      */
+
+      await db.runAsync(
+        `
+        INSERT OR IGNORE INTO sync_records (
+          entity_type, entity_id, revision, modified_at, modified_by_device, deleted
+        )
+        SELECT 'AREA', id, 1, ?, ?, 0 FROM areas
+        `,
+        now,
+        deviceId
+      );
+
+      /*
         Existing Transactions
       */
 
@@ -246,6 +262,7 @@ export async function getSyncStats():
     items: 0,
     departments: 0,
     people: 0,
+    areas: 0,
     transactions: 0,
     audits: 0,
     total: 0,
@@ -273,6 +290,10 @@ export async function getSyncStats():
       case 'PERSON':
         stats.people =
           total;
+        break;
+
+      case 'AREA':
+        stats.areas = total;
         break;
 
       case 'TRANSACTION':

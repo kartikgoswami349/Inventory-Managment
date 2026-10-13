@@ -89,6 +89,13 @@ export default function TransactionsScreen() {
           .includes(searchText) ||
 
         (
+          transaction.area_name ??
+          ''
+        )
+          .toLowerCase()
+          .includes(searchText) ||
+
+        (
           transaction.person_name ??
           transaction.other_name ??
           ''
@@ -292,6 +299,13 @@ function TransactionCard({
         <Text style={styles.meta}>
           Department:{' '}
           {transaction.department_name}
+        </Text>
+      )}
+
+      {!!transaction.area_name && (
+        <Text style={styles.meta}>
+          Area:{' '}
+          {transaction.area_name}
         </Text>
       )}
 

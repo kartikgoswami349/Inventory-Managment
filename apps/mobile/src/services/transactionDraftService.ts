@@ -18,6 +18,8 @@ export interface TransactionDraftItem {
 
 export interface TransactionDraft {
   type: TransactionType;
+  areaId: string | null;
+  areaName: string;
 
   departmentId: string;
   departmentName: string;

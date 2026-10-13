@@ -31,6 +31,7 @@ export type InventoryTransactionInput = {
   type: 'ISSUED' | 'RECEIVED';
   items: Array<{ itemId: string; quantity: number }>;
   departmentId: string;
+  areaId: string | null;
   personId: string | null;
   otherName: string | null;
   remark: string;
@@ -87,6 +88,17 @@ export function getDb(): Database.Database {
       active INTEGER NOT NULL DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS areas (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY NOT NULL,
       item_id TEXT NOT NULL,
@@ -95,6 +107,7 @@ export function getDb(): Database.Database {
       stock_delta REAL NOT NULL,
       department_id TEXT,
       person_id TEXT,
+      area_id TEXT,
       other_name TEXT,
       other_department_name TEXT,
       remark TEXT,
@@ -151,7 +164,16 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_items_old_id ON items(old_item_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_item ON transactions(item_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_transactions_area ON transactions(area_id);
   `);
+
+  const transactionColumns = new Set(
+    (db.pragma('table_info(transactions)') as Array<{ name: string }>).map(column => column.name),
+  );
+  if (!transactionColumns.has('area_id')) {
+    db.exec('ALTER TABLE transactions ADD COLUMN area_id TEXT');
+  }
+  db.prepare(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('area_required', '0')`).run();
 
   const existing = db.prepare('SELECT device_id, device_name FROM local_device WHERE id = 1').get() as DeviceInfo | undefined;
   if (!existing) {
@@ -238,7 +260,53 @@ export function getPeopleByDepartment(departmentId: string): Array<{ id: string;
   `).all(departmentId) as Array<{ id: string; department_id: string; name: string }>;
 }
 
-function updateLocalSyncMetadata(entityType: 'DEPARTMENT' | 'PERSON', entityId: string, modifiedAt: string, deviceId: string) {
+export function getAreas(): Array<{ id: string; name: string }> {
+  return getDb().prepare(`
+    SELECT id, name FROM areas WHERE active = 1 ORDER BY name COLLATE NOCASE
+  `).all() as Array<{ id: string; name: string }>;
+}
+
+export function createArea(name: string) {
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error('Area name is required.');
+  const database = getDb();
+  const existing = database.prepare('SELECT id, active FROM areas WHERE LOWER(name) = LOWER(?)').get(cleanName) as { id: string; active: number } | undefined;
+  if (existing) {
+    if (!existing.active) {
+      database.prepare('UPDATE areas SET active = 1 WHERE id = ?').run(existing.id);
+      updateLocalSyncMetadata('AREA', existing.id, new Date().toISOString(), getDevice().id);
+      return { id: existing.id, name: cleanName };
+    }
+    throw new Error('This area already exists.');
+  }
+  const id = crypto.randomUUID();
+  database.prepare('INSERT INTO areas (id, name, active) VALUES (?, ?, 1)').run(id, cleanName);
+  updateLocalSyncMetadata('AREA', id, new Date().toISOString(), getDevice().id);
+  return { id, name: cleanName };
+}
+
+export function deactivateArea(areaId: string) {
+  if (!areaId.trim()) throw new Error('Select an area to deactivate.');
+  const database = getDb();
+  const area = database.prepare('SELECT id FROM areas WHERE id = ? AND active = 1').get(areaId);
+  if (!area) throw new Error('The selected area is no longer active.');
+  database.prepare('UPDATE areas SET active = 0 WHERE id = ?').run(areaId);
+  updateLocalSyncMetadata('AREA', areaId, new Date().toISOString(), getDevice().id);
+}
+
+export function isAreaRequired(): boolean {
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('area_required') as { value: string } | undefined;
+  return row?.value === '1';
+}
+
+export function setAreaRequired(required: boolean) {
+  getDb().prepare(`
+    INSERT INTO app_settings (key, value) VALUES ('area_required', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(required ? '1' : '0');
+}
+
+function updateLocalSyncMetadata(entityType: 'DEPARTMENT' | 'PERSON' | 'AREA', entityId: string, modifiedAt: string, deviceId: string) {
   getDb().prepare(`
     INSERT INTO sync_records (entity_type, entity_id, revision, modified_at, modified_by_device, deleted)
     VALUES (?, ?, 1, ?, ?, 0)
@@ -330,6 +398,7 @@ export function createInventoryTransactions(input: InventoryTransactionInput): {
   }
   if (!input.items.length) throw new Error('Add at least one item to the transaction.');
   if (!input.departmentId.trim()) throw new Error('Department is required.');
+  if (isAreaRequired() && !input.areaId) throw new Error('Area is required.');
 
   const otherName = input.otherName?.trim() ?? '';
   if (input.personId === null && !otherName) throw new Error('Person name is required.');
@@ -354,8 +423,8 @@ export function createInventoryTransactions(input: InventoryTransactionInput): {
     const insert = database.prepare(`
       INSERT INTO transactions (
         id, item_id, transaction_type, quantity, stock_delta, department_id, person_id,
-        other_name, other_department_name, remark, timestamp, device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+        area_id, other_name, other_department_name, remark, timestamp, device_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
     `);
 
     for (const item of input.items) {
@@ -388,6 +457,7 @@ export function createInventoryTransactions(input: InventoryTransactionInput): {
         stockDelta,
         input.departmentId,
         input.personId,
+        input.areaId,
         input.personId ? null : otherName,
         input.remark.trim() || null,
         timestamp,
@@ -668,6 +738,8 @@ export function getTransactions(limit = 300) {
       d.name AS department_name,
       t.person_id,
       p.name AS person_name,
+      t.area_id,
+      a.name AS area_name,
       t.other_name,
       t.remark,
       t.timestamp,
@@ -676,6 +748,7 @@ export function getTransactions(limit = 300) {
     LEFT JOIN items i ON i.id = t.item_id
     LEFT JOIN departments d ON d.id = t.department_id
     LEFT JOIN people p ON p.id = t.person_id
+    LEFT JOIN areas a ON a.id = t.area_id
     ORDER BY t.timestamp DESC
     LIMIT ?
   `).all(limit) as Array<Record<string, unknown>>;

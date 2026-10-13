@@ -21,11 +21,17 @@ declare global {
       createPerson(departmentId: string, name: string): Promise<{ id: string; department_id: string; name: string }>;
       deactivatePerson(personId: string): Promise<{ success: boolean }>;
       getPeopleByDepartment(departmentId: string): Promise<Array<{ id: string; department_id: string; name: string }>>;
+      getAreas(): Promise<Array<{ id: string; name: string }>>;
+      createArea(name: string): Promise<{ id: string; name: string }>;
+      deactivateArea(areaId: string): Promise<{ success: boolean }>;
+      getAreaRequired(): Promise<boolean>;
+      setAreaRequired(required: boolean): Promise<{ required: boolean }>;
       createInventoryTransactions(input: {
         type: 'ISSUED' | 'RECEIVED';
         items: Array<{ itemId: string; quantity: number }>;
         departmentId: string;
         personId: string | null;
+        areaId: string | null;
         otherName: string | null;
         remark: string;
       }): Promise<{ count: number }>;

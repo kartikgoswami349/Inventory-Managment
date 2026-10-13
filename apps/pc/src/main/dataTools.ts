@@ -47,7 +47,7 @@ function inspectDatabase(database: Database.Database): SqliteCounts {
     items: ['id', 'stock_id', 'item_name', 'unit', 'minimum_stock', 'qr_code', 'active', 'created_at', 'updated_at'],
     departments: ['id', 'name', 'active'],
     people: ['id', 'department_id', 'name', 'active'],
-    transactions: ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'other_name', 'remark', 'timestamp', 'device_id'],
+    transactions: ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'area_id', 'other_name', 'remark', 'timestamp', 'device_id'],
     audits: ['id', 'item_id', 'system_quantity', 'audited_quantity', 'variance', 'remark', 'timestamp', 'device_id'],
   };
   for (const [table, columns] of Object.entries(requiredColumns)) {
@@ -175,7 +175,7 @@ function readPacketFromSqlite(database: Database.Database): SyncPacket {
       departments: rowsToEntries(database, 'departments', 'DEPARTMENT', ['id', 'name', 'active'], modifiedAt, sourceId),
       people: rowsToEntries(database, 'people', 'PERSON', ['id', 'department_id', 'name', 'active'], modifiedAt, sourceId),
       items: rowsToEntries(database, 'items', 'ITEM', ['id', 'stock_id', 'old_item_id', 'item_name', 'unit', 'minimum_stock', 'qr_code', 'active', 'created_at', 'updated_at'], modifiedAt, sourceId),
-      transactions: rowsToEntries(database, 'transactions', 'TRANSACTION', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id'], modifiedAt, sourceId),
+      transactions: rowsToEntries(database, 'transactions', 'TRANSACTION', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'area_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id'], modifiedAt, sourceId),
       audits: rowsToEntries(database, 'audits', 'AUDIT', ['id', 'item_id', 'system_quantity', 'audited_quantity', 'variance', 'remark', 'timestamp', 'device_id'], modifiedAt, sourceId),
     },
   };
@@ -199,9 +199,10 @@ export async function restoreSqliteFile(filePath: string, recoveryPath: string) 
     const counts = inspectDatabase(source);
     const sourceRecords = {
       departments: readTable(source, 'departments', ['id', 'name', 'active']),
+      areas: readTable(source, 'areas', ['id', 'name', 'active']),
       people: readTable(source, 'people', ['id', 'department_id', 'name', 'active']),
       items: readTable(source, 'items', ['id', 'stock_id', 'old_item_id', 'item_name', 'unit', 'minimum_stock', 'qr_code', 'active', 'created_at', 'updated_at']),
-      transactions: readTable(source, 'transactions', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id']),
+      transactions: readTable(source, 'transactions', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'area_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id']),
       audits: readTable(source, 'audits', ['id', 'item_id', 'system_quantity', 'audited_quantity', 'variance', 'remark', 'timestamp', 'device_id']),
       syncRecords: deduplicateSyncRecords(readTable(source, 'sync_records', ['entity_type', 'entity_id', 'revision', 'modified_at', 'modified_by_device', 'deleted'])),
     };
@@ -213,6 +214,7 @@ export async function restoreSqliteFile(filePath: string, recoveryPath: string) 
       database.prepare('DELETE FROM transactions').run();
       database.prepare('DELETE FROM people').run();
       database.prepare('DELETE FROM departments').run();
+      database.prepare('DELETE FROM areas').run();
       database.prepare('DELETE FROM items').run();
       database.prepare('DELETE FROM sync_records').run();
 
@@ -236,9 +238,10 @@ export async function restoreSqliteFile(filePath: string, recoveryPath: string) 
         }
       };
       insertRows('departments', ['id', 'name', 'active'], sourceRecords.departments);
+      insertRows('areas', ['id', 'name', 'active'], sourceRecords.areas);
       insertRows('people', ['id', 'department_id', 'name', 'active'], sourceRecords.people);
       insertRows('items', ['id', 'stock_id', 'old_item_id', 'item_name', 'unit', 'minimum_stock', 'qr_code', 'active', 'created_at', 'updated_at'], sourceRecords.items);
-      insertRows('transactions', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id'], sourceRecords.transactions);
+      insertRows('transactions', ['id', 'item_id', 'transaction_type', 'quantity', 'stock_delta', 'department_id', 'person_id', 'area_id', 'other_name', 'other_department_name', 'remark', 'timestamp', 'device_id'], sourceRecords.transactions);
       insertRows('audits', ['id', 'item_id', 'system_quantity', 'audited_quantity', 'variance', 'remark', 'timestamp', 'device_id'], sourceRecords.audits);
 
       if (sourceRecords.syncRecords.length) {
@@ -352,6 +355,7 @@ export async function exportExcel(filePath: string) {
         t.stock_delta AS "Stock Change",
         SUM(t.stock_delta) OVER (PARTITION BY t.item_id ORDER BY t.timestamp, t.id ROWS UNBOUNDED PRECEDING) AS "Stock After",
         d.name AS "Department",
+        COALESCE(a.name, '') AS "Area",
         COALESCE(p.name, '') AS "Person Name",
         COALESCE(t.other_name, '') AS "Other Name",
         COALESCE(t.remark, '') AS "Remark",
@@ -360,6 +364,7 @@ export async function exportExcel(filePath: string) {
       LEFT JOIN items i ON i.id = t.item_id
       LEFT JOIN departments d ON d.id = t.department_id
       LEFT JOIN people p ON p.id = t.person_id
+      LEFT JOIN areas a ON a.id = t.area_id
     )
     SELECT *, "Stock After" - "Stock Change" AS "Stock Before"
     FROM history
@@ -390,7 +395,7 @@ export async function exportExcel(filePath: string) {
     {
       name: 'Transactions',
       rows: transactions,
-      headers: ['Record ID', 'Date & Time', 'Stock ID', 'Item ID', 'Item Name', 'Unit', 'Transaction Type', 'Quantity', 'Stock Change', 'Stock After', 'Department', 'Person Name', 'Other Name', 'Remark', 'Device', 'Stock Before'],
+      headers: ['Record ID', 'Date & Time', 'Stock ID', 'Item ID', 'Item Name', 'Unit', 'Transaction Type', 'Quantity', 'Stock Change', 'Stock After', 'Department', 'Area', 'Person Name', 'Other Name', 'Remark', 'Device', 'Stock Before'],
     },
     {
       name: 'Audits',

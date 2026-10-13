@@ -34,6 +34,11 @@ import {
     TransactionType,
 } from '../types';
 
+import {
+    Area,
+    getAreas,
+    isAreaRequired,
+} from '../repositories/areaRepository';
 
 export default function NewTransactionScreen() {
 
@@ -85,6 +90,12 @@ export default function NewTransactionScreen() {
   setRemark,
 ] = useState('');
 
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [areaRequired, setAreaRequired] = useState(false);
+  const [areaId, setAreaId] = useState('');
+  const [areaSearch, setAreaSearch] = useState('');
+  const [areaModalVisible, setAreaModalVisible] = useState(false);
+
 
   const [
     departmentModalVisible,
@@ -103,6 +114,12 @@ export default function NewTransactionScreen() {
   useEffect(() => {
 
     loadDepartments();
+    Promise.all([getAreas(), isAreaRequired()])
+      .then(([rows, required]) => {
+        setAreas(rows);
+        setAreaRequired(required);
+      })
+      .catch(error => Alert.alert('Area', String(error)));
 
   }, []);
 
@@ -200,6 +217,11 @@ export default function NewTransactionScreen() {
       return;
     }
 
+    if (areaRequired && !areaId) {
+      Alert.alert('Area Required', 'Please select an area.');
+      return;
+    }
+
 
     const department =
       departments.find(
@@ -242,6 +264,11 @@ export default function NewTransactionScreen() {
 
   remark:
     remark.trim(),
+
+  areaId: areaId || null,
+
+  areaName:
+    areas.find(row => row.id === areaId)?.name ?? '',
 });
 
 
@@ -380,6 +407,24 @@ export default function NewTransactionScreen() {
 
       </View>
 
+
+      {areaRequired && (
+        <>
+          <Text style={styles.label}>Area *</Text>
+          <Pressable
+            style={styles.selectBox}
+            onPress={() => {
+              Keyboard.dismiss();
+              setAreaModalVisible(true);
+            }}
+          >
+            <Text style={[styles.selectText, !areaId && styles.placeholder]}>
+              {areas.find(row => row.id === areaId)?.name ?? 'Select Area'}
+            </Text>
+            <Text style={styles.arrow}>›</Text>
+          </Pressable>
+        </>
+      )}
 
       <Text
         style={
@@ -709,6 +754,37 @@ export default function NewTransactionScreen() {
 
       </Modal>
 
+
+      <Modal
+        visible={areaModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAreaModalVisible(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setAreaModalVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Select Area</Text>
+            <TextInput
+              value={areaSearch}
+              onChangeText={setAreaSearch}
+              placeholder="Search areas"
+              style={styles.input}
+            />
+            <ScrollView>
+              {areas
+                .filter(area => area.name.toLowerCase().includes(areaSearch.trim().toLowerCase()))
+                .map(area => (
+                  <Pressable key={area.id} style={styles.option} onPress={() => {
+                    setAreaId(area.id);
+                    setAreaModalVisible(false);
+                  }}>
+                    <Text style={styles.optionText}>{area.name}</Text>
+                  </Pressable>
+                ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* PERSON MODAL */}
 

@@ -19,6 +19,11 @@ import {
   getInventory,
   getNextStockId,
   getPeopleByDepartment,
+  getAreas,
+  createArea,
+  deactivateArea,
+  isAreaRequired,
+  setAreaRequired,
   getTransactions,
   getTrustedDevice,
   getTrustedDevices,
@@ -197,6 +202,23 @@ function registerIpc() {
   ipcMain.handle('people:get-by-department', (_event, departmentId: string) => {
     if (!String(departmentId).trim()) throw new Error('Department ID is required.');
     return getPeopleByDepartment(String(departmentId));
+  });
+  ipcMain.handle('areas:get', () => getAreas());
+  ipcMain.handle('areas:create', (_event, name: string) => {
+    const result = createArea(String(name ?? ''));
+    requestImmediateSync();
+    return result;
+  });
+  ipcMain.handle('areas:deactivate', (_event, areaId: string) => {
+    deactivateArea(String(areaId ?? ''));
+    requestImmediateSync();
+    return { success: true };
+  });
+  ipcMain.handle('areas:required:get', () => isAreaRequired());
+  ipcMain.handle('areas:required:set', (_event, required: boolean) => {
+    setAreaRequired(Boolean(required));
+    requestImmediateSync();
+    return { required: isAreaRequired() };
   });
   ipcMain.handle('transactions:create', (_event, input) => {
     const result = createInventoryTransactions(input);

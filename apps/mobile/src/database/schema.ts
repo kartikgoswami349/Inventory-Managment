@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS people (
   REFERENCES departments(id)
 );
 
+CREATE TABLE IF NOT EXISTS areas (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT UNIQUE NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY NOT NULL,
   item_id TEXT NOT NULL,
@@ -38,13 +49,16 @@ CREATE TABLE IF NOT EXISTS transactions (
   stock_delta REAL NOT NULL,
   department_id TEXT,
   person_id TEXT,
+  area_id TEXT,
   other_name TEXT,
   remark TEXT,
   timestamp TEXT NOT NULL,
   device_id TEXT NOT NULL,
 
   FOREIGN KEY (item_id)
-  REFERENCES items(id)
+  REFERENCES items(id),
+  FOREIGN KEY (area_id)
+  REFERENCES areas(id)
 );
 
 CREATE TABLE IF NOT EXISTS audits (
@@ -66,6 +80,8 @@ ON transactions(item_id);
 
 CREATE INDEX IF NOT EXISTS idx_transactions_timestamp
 ON transactions(timestamp);
+CREATE INDEX IF NOT EXISTS idx_transactions_area
+ON transactions(area_id);
 
 CREATE INDEX IF NOT EXISTS idx_audits_item
 ON audits(item_id);
@@ -104,6 +120,42 @@ CREATE TABLE IF NOT EXISTS sync_peers (
   last_seen_at TEXT,
   last_sync_at TEXT
 );
+
+CREATE TRIGGER IF NOT EXISTS
+sync_area_insert
+AFTER INSERT ON areas
+BEGIN
+  INSERT INTO sync_records (
+    entity_type, entity_id, revision, modified_at, modified_by_device, deleted
+  )
+  VALUES (
+    'AREA', NEW.id, 1, datetime('now'),
+    COALESCE((SELECT device_id FROM local_device WHERE id = 1), 'UNKNOWN'), 0
+  )
+  ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+    revision = sync_records.revision + 1,
+    modified_at = excluded.modified_at,
+    modified_by_device = excluded.modified_by_device,
+    deleted = 0;
+END;
+
+CREATE TRIGGER IF NOT EXISTS
+sync_area_update
+AFTER UPDATE ON areas
+BEGIN
+  INSERT INTO sync_records (
+    entity_type, entity_id, revision, modified_at, modified_by_device, deleted
+  )
+  VALUES (
+    'AREA', NEW.id, 1, datetime('now'),
+    COALESCE((SELECT device_id FROM local_device WHERE id = 1), 'UNKNOWN'), 0
+  )
+  ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+    revision = sync_records.revision + 1,
+    modified_at = excluded.modified_at,
+    modified_by_device = excluded.modified_by_device,
+    deleted = 0;
+END;
 
 
 /*

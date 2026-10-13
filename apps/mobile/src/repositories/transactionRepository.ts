@@ -11,7 +11,8 @@ export async function createTransaction(
   remark?: string,
   departmentId?: string | null,
   personId?: string | null,
-  otherName?: string | null
+  otherName?: string | null,
+  areaId?: string | null
 ) {
   if (quantity <= 0) {
     throw new Error(
@@ -49,12 +50,13 @@ export async function createTransaction(
       stock_delta,
       department_id,
       person_id,
+      area_id,
       other_name,
       remark,
       timestamp,
       device_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     id,
     itemId,
@@ -63,6 +65,7 @@ export async function createTransaction(
     stockDelta,
     departmentId ?? null,
     personId ?? null,
+    areaId ?? null,
     otherName ?? null,
     remark ?? null,
     timestamp,
@@ -103,7 +106,8 @@ export async function createTransactionBatch(
 
   personId?: string | null,
 
-  otherName?: string | null
+  otherName?: string | null,
+  areaId?: string | null
 ): Promise<BatchTransactionResult[]> {
 
   if (items.length === 0) {
@@ -213,6 +217,7 @@ export async function createTransactionBatch(
             stock_delta,
             department_id,
             person_id,
+            area_id,
             other_name,
             remark,
             timestamp,
@@ -221,7 +226,7 @@ export async function createTransactionBatch(
 
           VALUES (
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
           )
           `,
 
@@ -238,6 +243,8 @@ export async function createTransactionBatch(
           departmentId ?? null,
 
           personId ?? null,
+
+          areaId ?? null,
 
           otherName ?? null,
 
@@ -292,6 +299,8 @@ export interface TransactionDetail {
   department_name: string | null;
   person_name: string | null;
   other_name: string | null;
+  area_id: string | null;
+  area_name: string | null;
 
   remark: string | null;
   device_id: string;
@@ -322,6 +331,8 @@ export async function getTransactionDetails():
           d.name AS department_name,
           p.name AS person_name,
           t.other_name,
+          t.area_id,
+          a.name AS area_name,
 
           t.remark,
           t.device_id,
@@ -344,6 +355,9 @@ export async function getTransactionDetails():
 
         LEFT JOIN people p
           ON p.id = t.person_id
+
+        LEFT JOIN areas a
+          ON a.id = t.area_id
       )
 
       SELECT

@@ -103,8 +103,11 @@ records:
   items
   departments
   people
+  areas (optional; ignored by older clients)
   transactions
   audits
+
+The area-required toggle is stored in each device's local `app_settings` table. It is intentionally not synchronized because older deployed Mobile clients have no settings record or packet section; missing settings retain the local default (OFF) without changing packet version 1 compatibility.
 
 Each record entry carries synchronization metadata such as:
 

@@ -20,7 +20,7 @@ let serverStartPromise: Promise<void> | null = null;
 let syncQueue: Promise<unknown> = Promise.resolve();
 
 export type SyncMeta = {
-  entityType: 'ITEM' | 'DEPARTMENT' | 'PERSON' | 'TRANSACTION' | 'AUDIT';
+  entityType: 'ITEM' | 'DEPARTMENT' | 'PERSON' | 'AREA' | 'TRANSACTION' | 'AUDIT';
   entityId: string;
   revision: number;
   modifiedAt: string;
@@ -40,6 +40,7 @@ export type SyncPacket = {
     items: SyncEntry<Record<string, unknown>>[];
     departments: SyncEntry<Record<string, unknown>>[];
     people: SyncEntry<Record<string, unknown>>[];
+    areas?: SyncEntry<Record<string, unknown>>[];
     transactions: SyncEntry<Record<string, unknown>>[];
     audits: SyncEntry<Record<string, unknown>>[];
   };
@@ -109,6 +110,7 @@ function ensureLocalMeta() {
       ['items', 'ITEM', 'id'],
       ['departments', 'DEPARTMENT', 'id'],
       ['people', 'PERSON', 'id'],
+      ['areas', 'AREA', 'id'],
       ['transactions', 'TRANSACTION', 'id'],
       ['audits', 'AUDIT', 'id'],
     ];
@@ -164,6 +166,7 @@ export function buildSyncPacket(): SyncPacket {
       items: readEntries('items', 'ITEM'),
       departments: readEntries('departments', 'DEPARTMENT'),
       people: readEntries('people', 'PERSON'),
+      areas: readEntries('areas', 'AREA'),
       transactions: readEntries('transactions', 'TRANSACTION'),
       audits: readEntries('audits', 'AUDIT'),
     },
@@ -213,6 +216,19 @@ function applyPacket(untrustedPacket: unknown) {
       writeMeta(entry.sync); applied++; people++;
     }
 
+    for (const entry of packet.records.areas ?? []) {
+      if (!shouldApplyMutable('AREA', String(entry.data.id), entry.sync)) { skipped++; continue; }
+      const nameConflict = database.prepare(
+        'SELECT id FROM areas WHERE LOWER(name) = LOWER(?) AND id <> ?',
+      ).get(entry.data.name, entry.data.id) as { id: string } | undefined;
+      if (nameConflict) throw new Error(`Cannot synchronize duplicate area name "${String(entry.data.name)}".`);
+      database.prepare(`
+        INSERT INTO areas (id, name, active) VALUES (?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = excluded.active
+      `).run(entry.data.id, entry.data.name, entry.data.active);
+      writeMeta(entry.sync); applied++;
+    }
+
     for (const entry of packet.records.items) {
       if (!shouldApplyMutable('ITEM', String(entry.data.id), entry.sync)) { skipped++; continue; }
       database.prepare(`
@@ -243,12 +259,13 @@ function applyPacket(untrustedPacket: unknown) {
       database.prepare(`
         INSERT INTO transactions (
           id, item_id, transaction_type, quantity, stock_delta, department_id, person_id,
-          other_name, other_department_name, remark, timestamp, device_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          area_id, other_name, other_department_name, remark, timestamp, device_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         entry.data.id, entry.data.item_id, entry.data.transaction_type, entry.data.quantity,
-        entry.data.stock_delta, entry.data.department_id, entry.data.person_id, entry.data.other_name,
-        entry.data.other_department_name ?? null, entry.data.remark, entry.data.timestamp, entry.data.device_id,
+        entry.data.stock_delta, entry.data.department_id, entry.data.person_id,
+        entry.data.area_id ?? null, entry.data.other_name, entry.data.other_department_name ?? null,
+        entry.data.remark, entry.data.timestamp, entry.data.device_id,
       );
       writeMeta(entry.sync); applied++; transactions++;
     }

@@ -74,6 +74,7 @@ const EMPTY_STATS: SyncStats = {
   items: 0,
   departments: 0,
   people: 0,
+  areas: 0,
   transactions: 0,
   audits: 0,
   total: 0,

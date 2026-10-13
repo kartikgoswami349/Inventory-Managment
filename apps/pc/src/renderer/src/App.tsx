@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-type Page = 'dashboard' | 'inventory' | 'add-item' | 'transactions' | 'new-transaction' | 'departments' | 'audits' | 'data-tools' | 'sync';
+type Page = 'dashboard' | 'inventory' | 'add-item' | 'transactions' | 'new-transaction' | 'departments' | 'areas' | 'audits' | 'data-tools' | 'sync';
 type UpdateStatus = { state: string; message: string; percent?: number; version?: string };
 
 type InventoryRow = {
@@ -39,6 +39,7 @@ type TransactionRow = {
   quantity: number;
   stock_delta: number;
   department_name: string | null;
+  area_name: string | null;
   person_name: string | null;
   other_name: string | null;
   remark: string | null;
@@ -106,6 +107,10 @@ export default function App() {
   const [transactionDepartmentId, setTransactionDepartmentId] = useState('');
   const [transactionPersonId, setTransactionPersonId] = useState('');
   const [transactionOtherName, setTransactionOtherName] = useState('');
+  const [areas, setAreas] = useState<Array<{ id: string; name: string }>>([]);
+  const [transactionAreaId, setTransactionAreaId] = useState('');
+  const [areaRequired, setAreaRequired] = useState(false);
+  const [newAreaName, setNewAreaName] = useState('');
   const [transactionRemark, setTransactionRemark] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditCandidates, setAuditCandidates] = useState<InventoryRow[]>([]);
@@ -179,8 +184,12 @@ export default function App() {
 
   useEffect(() => {
     if (page !== 'new-transaction') return;
-    window.r58.getDepartments()
-      .then(setDepartments)
+    Promise.all([window.r58.getDepartments(), window.r58.getAreas(), window.r58.getAreaRequired()])
+      .then(([departmentRows, areaRows, required]) => {
+        setDepartments(departmentRows);
+        setAreas(areaRows);
+        setAreaRequired(required);
+      })
       .catch(error => setMessage(error?.message ?? String(error)));
   }, [page]);
 
@@ -384,6 +393,51 @@ export default function App() {
     } catch (error: any) {
       setMessage(error?.message ?? String(error));
     }
+
+    async function loadAreas() {
+      const [rows, required] = await Promise.all([window.r58.getAreas(), window.r58.getAreaRequired()]);
+      setAreas(rows);
+      setAreaRequired(required);
+    }
+
+    async function addArea() {
+      setBusy(true);
+      setMessage('');
+      try {
+        const result = await window.r58.createArea(newAreaName);
+        setNewAreaName('');
+        await loadAreas();
+        setMessage(`Area "${result.name}" added.`);
+      } catch (error: any) {
+        setMessage(error?.message ?? String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function removeArea(id: string, name: string) {
+      if (!window.confirm(`Remove "${name}" from future selections? Existing transaction history will remain unchanged.`)) return;
+      setBusy(true);
+      try {
+        await window.r58.deactivateArea(id);
+        await loadAreas();
+        setMessage(`${name} removed from future selections.`);
+      } catch (error: any) {
+        setMessage(error?.message ?? String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function toggleAreaRequired(value: boolean) {
+      try {
+        const result = await window.r58.setAreaRequired(value);
+        setAreaRequired(result.required);
+        setMessage(value ? 'Area selection is now required.' : 'Area selection is now hidden.');
+      } catch (error: any) {
+        setMessage(error?.message ?? String(error));
+      }
+    }
   }
 
   async function addDepartment() {
@@ -481,6 +535,10 @@ export default function App() {
   }
 
   async function saveTransaction() {
+    if (areaRequired && !transactionAreaId) {
+      setMessage('Select an area.');
+      return;
+    }
     if (!transactionDepartmentId) {
       setMessage('Select a department.');
       return;
@@ -505,6 +563,7 @@ export default function App() {
         type: transactionType,
         items: transactionDraft.map(item => ({ itemId: item.id, quantity: item.count })),
         departmentId: transactionDepartmentId,
+        areaId: areaRequired ? transactionAreaId : null,
         personId: transactionPersonId === 'OTHER' ? null : transactionPersonId,
         otherName: transactionPersonId === 'OTHER' ? transactionOtherName.trim() : null,
         remark: transactionRemark,
@@ -513,6 +572,7 @@ export default function App() {
       setTransactionRemark('');
       setTransactionOtherName('');
       setTransactionPersonId('');
+      setTransactionAreaId('');
       setPage('transactions');
       setMessage(`${transactionType === 'ISSUED' ? 'Issue' : 'Receive'} saved for ${result.count} item${result.count === 1 ? '' : 's'}.`);
       await refreshAll();
@@ -720,6 +780,7 @@ export default function App() {
           <NavButton icon="▦" label="Inventory" active={page === 'inventory' || page === 'add-item'} onClick={() => setPage('inventory')} />
           <NavButton icon="↕" label="Transactions" active={page === 'transactions' || page === 'new-transaction'} onClick={() => setPage('transactions')} />
           <NavButton icon="♙" label="Departments" active={page === 'departments'} onClick={() => setPage('departments')} />
+          <NavButton icon="⌖" label="Areas" active={page === 'areas'} onClick={() => setPage('areas')} />
           <NavButton icon="✓" label="Stock Audit" active={page === 'audits'} onClick={() => setPage('audits')} />
           <NavButton icon="⇄" label="Data Tools" active={page === 'data-tools'} onClick={() => setPage('data-tools')} />
           <NavButton icon="◉" label="Device & Sync" active={page === 'sync'} onClick={() => setPage('sync')} />
@@ -734,7 +795,7 @@ export default function App() {
         <header className="topbar">
           <div>
             <div className="page-eyebrow">R58 INVENTORY</div>
-            <h1>{page === 'dashboard' ? 'Dashboard' : page === 'inventory' ? 'Inventory' : page === 'add-item' ? 'Add New Item' : page === 'transactions' ? 'Transactions' : page === 'new-transaction' ? 'New Transaction' : page === 'departments' ? 'Department Management' : page === 'audits' ? 'Stock Audit' : page === 'data-tools' ? 'Backup & Data Tools' : 'Device & Sync'}</h1>
+            <h1>{page === 'dashboard' ? 'Dashboard' : page === 'inventory' ? 'Inventory' : page === 'add-item' ? 'Add New Item' : page === 'transactions' ? 'Transactions' : page === 'new-transaction' ? 'New Transaction' : page === 'departments' ? 'Department Management' : page === 'areas' ? 'Area Directory' : page === 'audits' ? 'Stock Audit' : page === 'data-tools' ? 'Backup & Data Tools' : 'Device & Sync'}</h1>
           </div>
           <div className="top-actions">
             <button className="ghost-btn" onClick={refresh} disabled={busy}>↻ Refresh</button>
@@ -787,6 +848,7 @@ export default function App() {
               <QuickAction title="Audit" subtitle="Count physical stock" symbol="✓" onClick={() => setPage('audits')} />
               <QuickAction title="Transactions" subtitle="History and ledger" symbol="↕" onClick={() => setPage('transactions')} />
               <QuickAction title="Departments & People" subtitle="Manage transaction recipients" symbol="♙" onClick={() => setPage('departments')} />
+              <QuickAction title="Manage Areas" subtitle="Transaction destinations" symbol="⌖" onClick={() => setPage('areas')} />
               <QuickAction title="Backup & Restore" subtitle="Protect inventory data" symbol="⇄" onClick={() => setPage('data-tools')} />
               <QuickAction title="Device & Sync" subtitle="Connected devices" symbol="◉" onClick={() => setPage('sync')} />
             </div>
@@ -888,6 +950,15 @@ export default function App() {
                   <button className={`mode-btn ${transactionType === 'RECEIVED' ? 'selected' : ''}`} onClick={() => setTransactionType('RECEIVED')}>Receive</button>
                 </div>
                 <div className="form-grid transaction-fields">
+                  {areaRequired && (
+                    <div>
+                      <label htmlFor="transaction-area">Area *</label>
+                      <select id="transaction-area" className="field" value={transactionAreaId} onChange={event => setTransactionAreaId(event.target.value)}>
+                        <option value="">Select Area</option>
+                        {areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label htmlFor="transaction-department">Department *</label>
                     <select id="transaction-department" className="field" value={transactionDepartmentId} onChange={event => void selectTransactionDepartment(event.target.value)}>
@@ -1004,6 +1075,40 @@ export default function App() {
                   </>
                 ) : (
                   <div className="empty department-empty">Select a department to add or manage its people.</div>
+                )}
+
+                {page === 'areas' && (
+                  <section className="content department-page">
+                    <div className="department-layout">
+                      <div className="panel">
+                        <div className="panel-head">
+                          <div><h3>Area Directory</h3><span>Manage destinations used by Issue / Receive transactions.</span></div>
+                        </div>
+                        <div className="department-add-row">
+                          <input className="field" aria-label="New area name" value={newAreaName} onChange={event => setNewAreaName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void addArea(); }} placeholder="Area name" />
+                          <button className="primary-btn" onClick={() => void addArea()} disabled={busy || !newAreaName.trim()}>＋ Add</button>
+                        </div>
+                        <div className="department-list">
+                          {areas.map(area => (
+                            <div className="person-row" key={area.id}>
+                              <strong>{area.name}</strong>
+                              <button className="text-btn" onClick={() => void removeArea(area.id, area.name)} disabled={busy}>Remove</button>
+                            </div>
+                          ))}
+                          {!areas.length && <div className="empty">No active areas yet. Add one to get started.</div>}
+                        </div>
+                      </div>
+                      <div className="panel">
+                        <div className="panel-head">
+                          <div><h3>Transaction setting</h3><span>When OFF, the area selector is hidden completely.</span></div>
+                        </div>
+                        <label className="setting-toggle">
+                          <input type="checkbox" checked={areaRequired} onChange={event => void toggleAreaRequired(event.target.checked)} />
+                          <span>{areaRequired ? 'ON — require an area before saving' : 'OFF — do not ask for an area'}</span>
+                        </label>
+                      </div>
+                    </div>
+                  </section>
                 )}
               </div>
             </div>
@@ -1329,7 +1434,7 @@ function TableInventory({ rows }: { rows: InventoryRow[] }) {
 }
 
 function TableTransactions({ rows }: { rows: TransactionRow[] }) {
-  return <table><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Change</th><th>Department</th><th>Person</th><th>Remark</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{formatDate(row.timestamp)}</td><td><strong>{row.item_name}</strong><span className="sub-cell">{row.stock_id}</span></td><td>{row.transaction_type}</td><td className={Number(row.stock_delta) >= 0 ? 'delta-positive' : 'delta-negative'}>{Number(row.stock_delta) > 0 ? '+' : ''}{Number(row.stock_delta)} {row.unit}</td><td>{row.department_name || '—'}</td><td>{row.person_name || row.other_name || '—'}</td><td>{row.remark || '—'}</td></tr>)}</tbody></table>;
+  return <table><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Change</th><th>Department</th><th>Area</th><th>Person</th><th>Remark</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{formatDate(row.timestamp)}</td><td><strong>{row.item_name}</strong><span className="sub-cell">{row.stock_id}</span></td><td>{row.transaction_type}</td><td className={Number(row.stock_delta) >= 0 ? 'delta-positive' : 'delta-negative'}>{Number(row.stock_delta) > 0 ? '+' : ''}{Number(row.stock_delta)} {row.unit}</td><td>{row.department_name || '—'}</td><td>{row.area_name || '—'}</td><td>{row.person_name || row.other_name || '—'}</td><td>{row.remark || '—'}</td></tr>)}</tbody></table>;
 }
 
 function TableAudits({ rows }: { rows: AuditRow[] }) {

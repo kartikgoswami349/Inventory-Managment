@@ -364,6 +364,14 @@ export default function DashboardScreen() {
           />
 
           <QuickAction
+            title="Manage Areas"
+            subtitle="Transaction destinations"
+            symbol="⌖"
+            tone="blue"
+            onPress={() => router.push('/manage-areas')}
+          />
+
+          <QuickAction
             title="Backup & Restore"
             subtitle="Protect inventory data"
             symbol="⟳"
@@ -1247,4 +1255,3 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
 });
-

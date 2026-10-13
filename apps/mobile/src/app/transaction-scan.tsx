@@ -999,7 +999,9 @@ export default function TransactionScanScreen() {
   currentDraft.personId ===
     'OTHER'
     ? currentDraft.otherName
-    : null
+    : null,
+
+  currentDraft.areaId
 );
 
 

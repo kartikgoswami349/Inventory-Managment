@@ -25,6 +25,8 @@ type EntityType =
   | 'ITEM'
   | 'DEPARTMENT'
   | 'PERSON'
+  | 'AREA'
+  | 'SETTING'
   | 'TRANSACTION'
   | 'AUDIT';
 
@@ -76,6 +78,12 @@ interface PersonRow {
   active: number;
 }
 
+interface AreaRow {
+  id: string;
+  name: string;
+  active: number;
+}
+
 
 interface TransactionRow {
   id: string;
@@ -91,6 +99,7 @@ interface TransactionRow {
   other_name: string | null;
   other_department_name:
     string | null;
+  area_id: string | null;
 
   remark: string | null;
 
@@ -138,6 +147,9 @@ export interface SyncPacket {
     people:
       SyncEntry<PersonRow>[];
 
+    areas?: SyncEntry<AreaRow>[];
+
+
     transactions:
       SyncEntry<TransactionRow>[];
 
@@ -151,6 +163,7 @@ export interface SyncPacketResult {
   items: number;
   departments: number;
   people: number;
+  areas: number;
   transactions: number;
   audits: number;
 
@@ -311,6 +324,7 @@ export async function buildSyncPacketData():
     items,
     departments,
     people,
+    areas,
     transactions,
     audits,
   ] = await Promise.all([
@@ -328,6 +342,12 @@ export async function buildSyncPacketData():
       'people',
       'PERSON'
     ),
+
+    getEntries<AreaRow>(
+      'areas',
+      'AREA'
+    ),
+
 
     getEntries<TransactionRow>(
       'transactions',
@@ -361,6 +381,7 @@ export async function buildSyncPacketData():
       items,
       departments,
       people,
+      areas,
       transactions,
       audits,
     },
@@ -392,6 +413,7 @@ export async function createSyncPacket():
     items,
     departments,
     people,
+    areas,
     transactions,
     audits,
   ] = await Promise.all([
@@ -409,6 +431,11 @@ export async function createSyncPacket():
     getEntries<PersonRow>(
       'people',
       'PERSON'
+    ),
+
+    getEntries<AreaRow>(
+      'areas',
+      'AREA'
     ),
 
     getEntries<TransactionRow>(
@@ -444,6 +471,7 @@ export async function createSyncPacket():
       items,
       departments,
       people,
+      areas,
       transactions,
       audits,
     },
@@ -460,6 +488,9 @@ export async function createSyncPacket():
     people:
       people.length,
 
+    areas:
+      areas.length,
+
     transactions:
       transactions.length,
 
@@ -470,6 +501,7 @@ export async function createSyncPacket():
       items.length +
       departments.length +
       people.length +
+      areas.length +
       transactions.length +
       audits.length,
   };
@@ -835,6 +867,7 @@ async function importMutableRecords(
   let itemCount = 0;
   let departmentCount = 0;
   let peopleCount = 0;
+  let areaCount = 0;
 
 
   /*
@@ -969,6 +1002,37 @@ async function importMutableRecords(
     peopleCount += 1;
   }
 
+
+  /*
+    AREAS
+  */
+
+  for (const entry of packet.records.areas ?? []) {
+    const apply = await shouldApplyMutable('AREA', entry.data.id, entry.sync);
+    if (!apply) {
+      skipped += 1;
+      continue;
+    }
+    const nameConflict = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM areas WHERE LOWER(name) = LOWER(?) AND id <> ?`,
+      entry.data.name,
+      entry.data.id
+    );
+    if (nameConflict) {
+      throw new Error(`Cannot synchronize duplicate area name "${entry.data.name}".`);
+    }
+    await setTriggerDevice(entry.sync.modifiedByDevice);
+    await db.runAsync(
+      `INSERT INTO areas (id, name, active) VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = excluded.active`,
+      entry.data.id,
+      entry.data.name,
+      entry.data.active
+    );
+    await writeSyncMeta(entry.sync);
+    applied += 1;
+    areaCount += 1;
+  }
 
   /*
     ITEMS
@@ -1141,6 +1205,7 @@ async function importImmutableRecords(
 
         department_id,
         person_id,
+        area_id,
 
         other_name,
         other_department_name,
@@ -1152,7 +1217,7 @@ async function importImmutableRecords(
 
       VALUES (
         ?, ?, ?, ?, ?,
-        ?, ?,
+        ?, ?, ?,
         ?, ?,
         ?, ?, ?
       )
@@ -1165,6 +1230,7 @@ async function importImmutableRecords(
 
       entry.data.department_id,
       entry.data.person_id,
+      entry.data.area_id ?? null,
 
       entry.data.other_name,
       entry.data.other_department_name,
