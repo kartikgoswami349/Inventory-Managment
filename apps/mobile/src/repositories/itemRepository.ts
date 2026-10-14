@@ -330,11 +330,9 @@ export async function searchInventoryItems(
   const db =
     await getDatabase();
 
-  const contains =
-    `%${query}%`;
-
-  const startsWith =
-    `${query}%`;
+  const normalizedQuery = query.toLocaleLowerCase();
+  const contains = `%${normalizedQuery}%`;
+  const startsWith = `${normalizedQuery}%`;
 
 
   const rows =
@@ -366,47 +364,30 @@ export async function searchInventoryItems(
         i.active = 1
 
         AND (
-          i.item_name
-            COLLATE NOCASE
-            LIKE ?
+          LOWER(i.item_name) LIKE ?
 
-          OR i.stock_id
-            COLLATE NOCASE
-            LIKE ?
+          OR LOWER(i.stock_id) LIKE ?
 
-          OR COALESCE(
-            i.old_item_id,
-            ''
-          )
-            COLLATE NOCASE
-            LIKE ?
+          OR LOWER(COALESCE(i.old_item_id, '')) LIKE ?
         )
 
       ORDER BY
         CASE
 
           WHEN
-            i.stock_id
-              COLLATE NOCASE = ?
+            LOWER(i.stock_id) = ?
             THEN 0
 
           WHEN
-            COALESCE(
-              i.old_item_id,
-              ''
-            )
-              COLLATE NOCASE = ?
+            LOWER(COALESCE(i.old_item_id, '')) = ?
             THEN 1
 
           WHEN
-            i.item_name
-              COLLATE NOCASE = ?
+            LOWER(i.item_name) = ?
             THEN 2
 
           WHEN
-            i.item_name
-              COLLATE NOCASE
-              LIKE ?
+            LOWER(i.item_name) LIKE ?
             THEN 3
 
           ELSE 4
@@ -421,9 +402,9 @@ export async function searchInventoryItems(
       contains,
       contains,
       contains,
-      query,
-      query,
-      query,
+      normalizedQuery,
+      normalizedQuery,
+      normalizedQuery,
       startsWith
     );
 

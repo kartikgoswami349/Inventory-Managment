@@ -1,5 +1,6 @@
 import {
     useCallback,
+    useEffect,
     useState,
 } from 'react';
 
@@ -86,13 +87,12 @@ export default function ManageItemsScreen() {
   );
 
 
-  async function handleSearch(
-    value: string
-  ) {
-    setSearch(value);
-
-    await loadItems(value);
-  }
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadItems(search);
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [search]);
 
 
   function handleEdit(
@@ -233,9 +233,7 @@ export default function ManageItemsScreen() {
         <TextInput
           value={search}
 
-          onChangeText={
-            handleSearch
-          }
+          onChangeText={setSearch}
 
           placeholder="Search item, Stock ID or old Item ID"
 

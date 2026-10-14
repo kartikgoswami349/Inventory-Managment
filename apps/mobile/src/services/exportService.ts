@@ -58,6 +58,9 @@ export async function exportTransactionsToExcel(
       'Department':
         transaction.department_name ?? '',
 
+      'Area':
+        transaction.area_name ?? '',
+
       'Person Name':
         transaction.person_name ?? '',
 
@@ -86,6 +89,7 @@ export async function exportTransactionsToExcel(
     { wch: 12 },
     { wch: 14 },
     { wch: 14 },
+    { wch: 20 },
     { wch: 20 },
     { wch: 25 },
     { wch: 25 },

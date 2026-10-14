@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import r58Logo from './assets/r58-logo.png';
 
 type Page = 'dashboard' | 'inventory' | 'add-item' | 'transactions' | 'new-transaction' | 'departments' | 'areas' | 'audits' | 'data-tools' | 'sync';
 type UpdateStatus = { state: string; message: string; percent?: number; version?: string };
@@ -404,49 +405,53 @@ export default function App() {
       setMessage(error?.message ?? String(error));
     }
 
-    async function loadAreas() {
-      const [rows, required] = await Promise.all([window.r58.getAreas(), window.r58.getAreaRequired()]);
-      setAreas(rows);
-      setAreaRequired(required);
-    }
+  }
 
-    async function addArea() {
-      setBusy(true);
-      setMessage('');
-      try {
-        const result = await window.r58.createArea(newAreaName);
-        setNewAreaName('');
-        await loadAreas();
-        setMessage(`Area "${result.name}" added.`);
-      } catch (error: any) {
-        setMessage(error?.message ?? String(error));
-      } finally {
-        setBusy(false);
-      }
-    }
+  async function loadAreas() {
+    const [rows, required] = await Promise.all([window.r58.getAreas(), window.r58.getAreaRequired()]);
+    setAreas(rows);
+    setAreaRequired(required);
+  }
 
-    async function removeArea(id: string, name: string) {
-      if (!window.confirm(`Remove "${name}" from future selections? Existing transaction history will remain unchanged.`)) return;
-      setBusy(true);
-      try {
-        await window.r58.deactivateArea(id);
-        await loadAreas();
-        setMessage(`${name} removed from future selections.`);
-      } catch (error: any) {
-        setMessage(error?.message ?? String(error));
-      } finally {
-        setBusy(false);
-      }
+  async function addArea() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await window.r58.createArea(newAreaName);
+      setNewAreaName('');
+      await loadAreas();
+      setMessage(`Area "${result.name}" added.`);
+    } catch (error: any) {
+      setMessage(error?.message ?? String(error));
+    } finally {
+      setBusy(false);
     }
+  }
 
-    async function toggleAreaRequired(value: boolean) {
-      try {
-        const result = await window.r58.setAreaRequired(value);
-        setAreaRequired(result.required);
-        setMessage(value ? 'Area selection is now required.' : 'Area selection is now hidden.');
-      } catch (error: any) {
-        setMessage(error?.message ?? String(error));
-      }
+  async function removeArea(id: string, name: string) {
+    if (!window.confirm(`Remove "${name}" from future selections? Existing transaction history will remain unchanged.`)) return;
+    setBusy(true);
+    try {
+      await window.r58.deactivateArea(id);
+      await loadAreas();
+      setMessage(`${name} removed from future selections.`);
+    } catch (error: any) {
+      setMessage(error?.message ?? String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAreaRequired(value: boolean) {
+    setBusy(true);
+    try {
+      const result = await window.r58.setAreaRequired(value);
+      setAreaRequired(result.required);
+      setMessage(value ? 'Area selection is now required.' : 'Area selection is now hidden.');
+    } catch (error: any) {
+      setMessage(error?.message ?? String(error));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -779,7 +784,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">R58</div>
+          <img className="brand-mark" src={r58Logo} alt="Shri Siddhdata Ashram logo" />
           <div>
             <div className="brand-title">R58 Inventory</div>
             <div className="brand-sub">Windows</div>
@@ -879,7 +884,7 @@ export default function App() {
         {page === 'inventory' && (
           <section className="content">
             <div className="toolbar inventory-toolbar panel">
-              <div className="search-box"><span>⌕</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search item name, Stock ID, old item ID" /></div>
+              <div className="search-box"><span>⌕</span><input aria-label="Search inventory items" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search item name, Stock ID, old item ID" />{search && <button className="search-clear" aria-label="Clear inventory search" onClick={() => setSearch('')}>×</button>}</div>
               <div className="toolbar-note">{inventory.length} shown</div>
               <button className="primary-btn" onClick={() => setPage('add-item')}>＋ Add New Item</button>
             </div>

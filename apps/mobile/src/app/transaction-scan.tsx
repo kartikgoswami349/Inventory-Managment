@@ -764,6 +764,19 @@ export default function TransactionScanScreen() {
     refreshDraft();
   }
 
+  function addOne(
+    item: TransactionDraftItem
+  ) {
+    addItem({
+      id: item.itemId,
+      stock_id: item.stockId,
+      old_item_id: item.oldItemId,
+      item_name: item.itemName,
+      unit: item.unit,
+      current_stock: item.currentStock,
+    });
+  }
+
 
   /*
     SEARCH ITEM ADD
@@ -1791,28 +1804,20 @@ export default function TransactionScanScreen() {
                 </View>
 
 
-                <Pressable
-
-                  style={
-                    styles.removeButton
-                  }
-
-                  onPress={() =>
-                    removeOne(
-                      item.itemId
-                    )
-                  }
-                >
-
-                  <Text
-                    style={
-                      styles.removeButtonText
-                    }
+                <View style={styles.itemActions}>
+                  <Pressable
+                    style={styles.addOneButton}
+                    onPress={() => addOne(item)}
                   >
-                    Remove One
-                  </Text>
-
-                </Pressable>
+                    <Text style={styles.addOneButtonText}>Add One</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.removeButton}
+                    onPress={() => removeOne(item.itemId)}
+                  >
+                    <Text style={styles.removeButtonText}>Remove One</Text>
+                  </Pressable>
+                </View>
 
               </View>
             )
@@ -2626,6 +2631,11 @@ const styles =
       paddingRight: 8,
     },
 
+    itemActions: {
+      alignItems: 'flex-end',
+      gap: 7,
+    },
+
     stockId: {
       color: '#166534',
       fontSize: 11,
@@ -2652,6 +2662,19 @@ const styles =
       paddingHorizontal: 11,
       paddingVertical: 9,
       borderRadius: 10,
+    },
+
+    addOneButton: {
+      backgroundColor: '#DCFCE7',
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+      borderRadius: 10,
+    },
+
+    addOneButtonText: {
+      color: '#166534',
+      fontWeight: '800',
+      fontSize: 11,
     },
 
     removeButtonText: {
