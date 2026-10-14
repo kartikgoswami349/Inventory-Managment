@@ -1147,6 +1147,23 @@ Audits: ${result.audits}`
                   Forget
                 </Text>
               </Pressable>
+
+              <Pressable
+              disabled={packetWorking}
+              onPress={async () => {
+                await removeTrustedDevice(device.deviceId);
+                await loadPairingData();
+                Alert.alert(
+                  'Ready to Re-pair',
+                  'Enter the new pairing code from this device and pair again.'
+                );
+              }}
+              style={styles.forgetButton}
+              >
+              <Text style={styles.forgetButtonText}>
+                Re-pair
+              </Text>
+              </Pressable>
             </View>
           )}
         </View>

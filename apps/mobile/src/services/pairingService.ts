@@ -272,13 +272,22 @@ export async function removeTrustedDevice(
   const db =
     await getDatabase();
 
-  await db.runAsync(
-    `
-    DELETE FROM trusted_devices
-    WHERE device_id = ?
-    `,
-    deviceId
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `
+      DELETE FROM trusted_devices
+      WHERE device_id = ?
+      `,
+      deviceId
+    );
+    await db.runAsync(
+      `
+      DELETE FROM sync_peers
+      WHERE device_id = ?
+      `,
+      deviceId
+    );
+  });
 }
 
 export async function touchTrustedDevice(

@@ -1321,7 +1321,14 @@ export default function App() {
                   <span className={`pill ${autoSyncStatus?.running ? 'pill-ok' : 'pill-muted'}`}>
                     {autoSyncStatus?.running ? 'Auto Sync ON' : 'Auto Sync OFF'}
                   </span>
-                  <button className="ghost-btn small-btn" onClick={() => window.r58.refreshNearbyDevices()}>↻ Find</button>
+                  <button className="ghost-btn small-btn" onClick={async () => {
+                    try {
+                      const result = await window.r58.refreshNearbyDevices();
+                      setMessage(`Nearby discovery refreshed (${result.devices} device${result.devices === 1 ? '' : 's'} found).`);
+                    } catch (error: any) {
+                      setMessage(error?.message ?? String(error));
+                    }
+                  }}>↻ Find</button>
                 </div>
               </div>
 

@@ -132,22 +132,31 @@ function chooseAddress(
     Prefer IPv4 LAN address.
   */
 
+  const ipv4Candidates =
+    addresses
+      .map((address: any) => String(address).trim().replace(/^::ffff:/i, ''))
+      .filter((value: string) => {
+        const parts = value.split('.').map(Number);
+        return parts.length === 4 &&
+          parts.every(part => Number.isInteger(part) && part >= 0 && part <= 255) &&
+          value !== '127.0.0.1' &&
+          !value.startsWith('169.254.') &&
+          !(parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127);
+      });
+
   const ipv4 =
-    addresses.find(
+    ipv4Candidates.find(
       (
         address: any
       ) => {
-
-        const value =
-          String(address);
-
-        return (
-          value.includes('.') &&
-          value !==
-            '127.0.0.1'
-        );
+        const value = String(address);
+        return value.startsWith('10.') ||
+          value.startsWith('192.168.') ||
+          (value.startsWith('172.') &&
+            Number(value.split('.')[1]) >= 16 &&
+            Number(value.split('.')[1]) <= 31);
       }
-    );
+    ) ?? ipv4Candidates[0];
 
 
   if (ipv4) {
@@ -159,19 +168,7 @@ function chooseAddress(
     Fallback if only IPv6 exists.
   */
 
-  const fallback =
-    addresses.find(
-      (
-        address: any
-      ) =>
-        String(address) !==
-        '::1'
-    );
-
-
-  return fallback
-    ? String(fallback)
-    : null;
+  return null;
 }
 
 
@@ -443,6 +440,7 @@ export function refreshNearbyDiscovery() {
         IMPLEMENTATION
       );
     } catch {}
+    scanning = false;
   }
 
 
@@ -465,17 +463,14 @@ export function refreshNearbyDiscovery() {
 
 export function stopNearbyScan() {
 
-  if (!scanning) {
-    return;
+  if (scanning) {
+    try {
+      zeroconf.stop(
+        IMPLEMENTATION
+      );
+    } catch {}
   }
-
-
-  try {
-    zeroconf.stop(
-      IMPLEMENTATION
-    );
-  } catch {}
-
-
   scanning = false;
+  devices.clear();
+  emitDevices();
 }

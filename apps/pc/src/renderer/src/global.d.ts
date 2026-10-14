@@ -96,7 +96,7 @@ declare global {
       getTrustedDevices(): Promise<any[]>;
       removeTrustedDevice(deviceId: string): Promise<{ success: boolean }>;
       getNearbyDevices(): Promise<any[]>;
-      refreshNearbyDevices(): Promise<void>;
+      refreshNearbyDevices(): Promise<{ running: boolean; devices: number }>;
       getAutoSyncStatus(): Promise<any>;
       generatePairingCode(): Promise<{ code: string; expiresAt: string }>;
       getActivePairingCode(): Promise<{ code: string; expiresAt: string } | null>;

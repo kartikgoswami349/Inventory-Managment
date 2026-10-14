@@ -6,7 +6,9 @@ import {
 import {
     Alert,
     Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -415,6 +417,7 @@ export default function NewTransactionScreen() {
             style={styles.selectBox}
             onPress={() => {
               Keyboard.dismiss();
+              setAreaSearch('');
               setAreaModalVisible(true);
             }}
           >
@@ -759,31 +762,51 @@ export default function NewTransactionScreen() {
         visible={areaModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setAreaModalVisible(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setAreaModalVisible(false);
+        }}
       >
-        <Pressable style={styles.overlay} onPress={() => setAreaModalVisible(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Select Area</Text>
-            <TextInput
-              value={areaSearch}
-              onChangeText={setAreaSearch}
-              placeholder="Search areas"
-              style={styles.input}
-            />
-            <ScrollView>
-              {areas
-                .filter(area => area.name.toLowerCase().includes(areaSearch.trim().toLowerCase()))
-                .map(area => (
-                  <Pressable key={area.id} style={styles.option} onPress={() => {
-                    setAreaId(area.id);
-                    setAreaModalVisible(false);
-                  }}>
-                    <Text style={styles.optionText}>{area.name}</Text>
-                  </Pressable>
-                ))}
-            </ScrollView>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.overlay} onPress={() => {
+            Keyboard.dismiss();
+            setAreaModalVisible(false);
+          }}>
+            <Pressable style={styles.areaModalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>Select Area</Text>
+              <TextInput
+                autoFocus
+                value={areaSearch}
+                onChangeText={setAreaSearch}
+                placeholder="Search areas"
+                placeholderTextColor="#64748B"
+                style={styles.areaSearchInput}
+                returnKeyType="search"
+              />
+              <ScrollView
+                style={styles.areaOptions}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+              >
+                {areas
+                  .filter(area => area.name.toLowerCase().includes(areaSearch.trim().toLowerCase()))
+                  .map(area => (
+                    <Pressable key={area.id} style={styles.option} onPress={() => {
+                      Keyboard.dismiss();
+                      setAreaId(area.id);
+                      setAreaSearch('');
+                      setAreaModalVisible(false);
+                    }}>
+                      <Text style={styles.optionText}>{area.name}</Text>
+                    </Pressable>
+                  ))}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* PERSON MODAL */}
@@ -1061,12 +1084,40 @@ const styles =
       padding: 25,
     },
 
+    keyboardAvoidingView: {
+      flex: 1,
+    },
+
     modalCard: {
       backgroundColor:
         '#FFFFFF',
       borderRadius: 20,
       padding: 18,
       maxHeight: '70%',
+    },
+
+    areaModalCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 20,
+      padding: 18,
+      height: '75%',
+      maxHeight: 520,
+    },
+
+    areaSearchInput: {
+      backgroundColor: '#F8FAFC',
+      borderColor: '#CBD5E1',
+      borderRadius: 14,
+      borderWidth: 1,
+      color: '#0F172A',
+      minHeight: 54,
+      paddingHorizontal: 16,
+      fontSize: 16,
+      marginBottom: 10,
+    },
+
+    areaOptions: {
+      flex: 1,
     },
 
     modalTitle: {

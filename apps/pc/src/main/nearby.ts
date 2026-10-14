@@ -1,4 +1,5 @@
 import Bonjour from 'bonjour-service';
+import dns from 'node:dns/promises';
 import net from 'node:net';
 import os from 'node:os';
 import { getDevice } from './database';
@@ -248,7 +249,7 @@ function removeByService(
 /**
  * Called whenever an R58 Android/PC service is discovered.
  */
-function handleServiceUp(service: any): void {
+async function handleServiceUp(service: any): Promise<void> {
   console.log(
     'R58 PC mDNS SERVICE FOUND:',
     {
@@ -295,7 +296,24 @@ function handleServiceUp(service: any): void {
       rawAddresses,
     );
 
-    const address = chooseIpv4(addresses);
+    let address = chooseIpv4(addresses);
+
+    if (!address && service?.host) {
+      try {
+        const resolved = await dns.lookup(String(service.host), {
+          all: true,
+          family: 4,
+        });
+        for (const entry of resolved) {
+          if (isUsableIpv4(entry.address)) {
+            addresses.push(entry.address);
+          }
+        }
+        address = chooseIpv4(addresses);
+      } catch (error) {
+        console.warn('R58 PC mDNS HOST LOOKUP FAILED:', service.host, error);
+      }
+    }
 
     // We only want an IPv4 address that the PC
     // can actually use for TCP.
@@ -518,21 +536,14 @@ export function getNearbyDevices(): NearbyR58Device[] {
 /**
  * Force an mDNS query.
  */
-export function refreshNearbyDiscovery(): void {
+export async function refreshNearbyDiscovery(): Promise<{ running: boolean; devices: number }> {
   if (!browser) {
-    void startNearbyDiscovery().catch(
-      (error) => {
-        console.error(
-          'R58 PC DISCOVERY START ERROR:',
-          error,
-        );
-      },
-    );
-
-    return;
+    await startNearbyDiscovery();
+    return { running: true, devices: devices.size };
   }
 
   try {
+    devices.clear();
     browser.update?.();
 
     console.log(
@@ -543,7 +554,9 @@ export function refreshNearbyDiscovery(): void {
       'R58 PC DISCOVERY REFRESH ERROR:',
       error,
     );
+    throw error;
   }
+  return { running: started, devices: devices.size };
 }
 
 /**
